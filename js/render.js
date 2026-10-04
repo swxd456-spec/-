@@ -282,12 +282,19 @@
       }
       if (win) {
         const u = t - this.hl.t0;
-        sc *= (u < 0.35 ? 1 + 0.22 * Math.sin((u / 0.35) * Math.PI) : 1) + 0.06 * Math.sin(u * 7);
+        sc *= (u < 0.4 ? 1 + 0.38 * Math.sin((u / 0.4) * Math.PI) : 1) + 0.07 * Math.sin(u * 7);
+        const tc = this.tierColor(d.c.s);
+        this.drawRays(ctx, cx, cy, Math.min(rw, ch) * 0.95, tc, t * 1.5 + r);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.55 + 0.25 * Math.sin(u * 7);
-        const gs = Math.min(rw, ch) * 1.5;
-        ctx.drawImage(root.FxSprites.glow(this.tierColor(d.c.s)), cx - gs / 2, cy - gs / 2, gs, gs);
+        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(u * 7);
+        const gs = Math.min(rw, ch) * 1.9;
+        ctx.drawImage(root.FxSprites.glow(tc), cx - gs / 2, cy - gs / 2, gs, gs);
+        if (u < 0.5) {
+          ctx.globalAlpha = (1 - u / 0.5) * 0.9;
+          const ws = Math.min(rw, ch) * (1.2 + u * 2.5);
+          ctx.drawImage(root.FxSprites.glow('#ffffff'), cx - ws / 2, cy - ws / 2, ws, ws);
+        }
         ctx.restore();
       } else if (sym.type === 'scatter' || sym.type === 'bonus') {
         this.drawRays(ctx, cx, cy, Math.min(rw, ch) * 0.75, sym.type === 'bonus' ? '#ffcc33' : this.th.accent2, t);
@@ -423,21 +430,27 @@
       this.drawFlashes(ctx, t);
     }
 
+    // reel-stop flash: a light band blooming from the middle of the reel
     drawStopFx(ctx, t) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (const f of this.stopFx) {
-        const u = (t - f.t0) / 0.35;
+        const u = (t - f.t0) / 0.45;
         if (u > 1) continue;
-        const x = this.reelX(f.r);
-        const a = (1 - u) * 0.45;
-        const g = ctx.createLinearGradient(0, this.pad + this.rh * 0.6, 0, this.pad + this.rh);
-        g.addColorStop(0, U.rgba(this.th.accent, 0)); g.addColorStop(1, U.rgba(this.th.accent, a));
-        ctx.fillStyle = g;
-        ctx.fillRect(x, this.pad + this.rh * 0.6, this.rw, this.rh * 0.4);
+        const x = this.reelX(f.r), cx = x + this.rw / 2, cy = this.pad + this.rh / 2;
+        const a = (1 - u);
+        const gl = root.FxSprites.glow(this.th.accent);
+        ctx.globalAlpha = a * 0.75;
+        const gw = this.rw * (1.1 + u * 0.6), gh = this.rh * (0.35 + u * 0.75);
+        ctx.drawImage(gl, cx - gw / 2, cy - gh / 2, gw, gh);
+        ctx.globalAlpha = a * 0.9;
+        const lg = ctx.createLinearGradient(x, 0, x + this.rw, 0);
+        lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.95)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = lg;
+        ctx.fillRect(x - this.rw * 0.2, cy - 1.5 - u * 2, this.rw * 1.4, 3 + u * 4);
       }
       ctx.restore();
-      this.stopFx = this.stopFx.filter((f) => t - f.t0 < 0.35);
+      this.stopFx = this.stopFx.filter((f) => t - f.t0 < 0.45);
     }
 
     drawAnticipation(ctx, r, t) {
@@ -492,9 +505,10 @@
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 9; path(upto); ctx.stroke();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = U.rgba(col, 0.35); ctx.lineWidth = 12; path(upto); ctx.stroke();
-        ctx.strokeStyle = col; ctx.lineWidth = 4.5; path(upto); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.6; path(upto); ctx.stroke();
+        ctx.strokeStyle = U.rgba(col, 0.28); ctx.lineWidth = 20; path(upto); ctx.stroke();
+        ctx.strokeStyle = U.rgba(col, 0.5); ctx.lineWidth = 10; path(upto); ctx.stroke();
+        ctx.strokeStyle = col; ctx.lineWidth = 5; path(upto); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 2; path(upto); ctx.stroke();
         // travelling energy pulses
         if (prog >= 1) {
           for (let k = 0; k < 3; k++) {
@@ -504,7 +518,8 @@
             if (i >= segs.length) continue;
             const f = d / segs[i];
             const px = U.lerp(pts[i][0], pts[i + 1][0], f), py = U.lerp(pts[i][1], pts[i + 1][1], f);
-            ctx.drawImage(root.FxSprites.glow(col), px - 16, py - 16, 32, 32);
+            ctx.drawImage(root.FxSprites.glow(col), px - 26, py - 26, 52, 52);
+            ctx.drawImage(root.FxSprites.glow('#ffffff'), px - 10, py - 10, 20, 20);
           }
         }
       });

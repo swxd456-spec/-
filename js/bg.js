@@ -8,7 +8,7 @@ float h1(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
  return mix(mix(h1(i),h1(i+vec2(1,0)),f.x),mix(h1(i+vec2(0,1)),h1(i+vec2(1,1)),f.x),f.y);}
 float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*vn(p);p=p*2.02+vec2(1.7,9.2);a*=.5;}return v;}
-vec3 vig(vec3 c,vec2 uv){float d=length(uv-.5);return c*(1.-smoothstep(.35,.95,d)*.75);}
+vec3 vig(vec3 c,vec2 uv){float d=length(uv-.5);c*=1.-smoothstep(.35,.95,d)*.75;c+=(h1(gl_FragCoord.xy+fract(T*7.3)*91.)-.5)*.03;return pow(max(c,0.),vec3(.95));}
 float stars(vec2 uv,float sc,float t){vec2 g=uv*sc;vec2 id=floor(g);vec2 f=fract(g)-.5;float r=h1(id);
  if(r<.92)return 0.;vec2 o=vec2(h1(id+3.1),h1(id+7.7))-.5;float d=length(f-o*.7);
  float tw=.5+.5*sin(t*(1.+r*3.)+r*40.);return smoothstep(.06,0.,d)*tw;}
@@ -105,7 +105,7 @@ float stars(vec2 uv,float sc,float t){vec2 g=uv*sc;vec2 id=floor(g);vec2 f=fract
       this.cv = canvas;
       this.ok = false;
       this.progs = {};
-      this.scale = 0.5;
+      this.scale = 0.6;
       try {
         const gl = canvas.getContext('webgl', { antialias: false, alpha: false, premultipliedAlpha: false, powerPreference: 'low-power' });
         if (!gl) return;

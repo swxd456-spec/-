@@ -52,9 +52,25 @@
     </div>
     <div class="g-info js-info"></div>
     <div class="g-stage js-stage">
-      <div class="frame js-frame">
-        <canvas class="reels js-reels"></canvas>
-        <div class="frame-glare"></div>
+      <div class="cab js-cab">
+        <div class="frame js-frame">
+          <div class="led led-top"></div>
+          <canvas class="reels js-reels"></canvas>
+          <div class="frame-glare"></div>
+          <div class="win-banner js-banner" aria-live="polite">
+            <div class="wb-rays"></div>
+            <div class="wb-label js-wb-label">WIN</div>
+            <div class="wb-amt js-wb-amt">0</div>
+          </div>
+          <div class="led led-bot"></div>
+          <i class="bolt b1"></i><i class="bolt b2"></i><i class="bolt b3"></i><i class="bolt b4"></i>
+        </div>
+        <div class="lever js-lever hidden" role="button" tabindex="0" aria-label="레버를 당겨 스핀">
+          <div class="lever-housing"></div>
+          <div class="lever-shaft js-lever-shaft"></div>
+          <div class="lever-knob js-lever-knob"></div>
+          <div class="lever-pivot"></div>
+        </div>
       </div>
     </div>
     <div class="g-msg js-msg"></div>
@@ -69,6 +85,7 @@
       </div>
       <div class="dock-center">
         <button class="round-btn js-auto" aria-label="자동 스핀"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><small class="js-auto-label">AUTO</small></button>
+        <button class="pull-hint js-pull-hint hidden" aria-label="레버 당기기"><span>PULL</span><svg viewBox="0 0 24 24"><path d="M12 4v13M6 12l6 6 6-6" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="spin-btn js-spin" aria-label="스핀 (Space)">
           <span class="spin-ring"></span>
           <svg class="spin-ico" viewBox="0 0 48 48"><path d="M24 8a16 16 0 1 1-14.4 9" fill="none" stroke-width="5" stroke-linecap="round"/><path d="M4 12l6 6 6-7z"/></svg>

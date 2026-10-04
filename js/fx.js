@@ -200,6 +200,7 @@
       this.ps = [];
       this.texts = [];
       this.rings = [];
+      this.flare = [];
       this.resize();
       root.addEventListener('resize', () => this.resize());
     }
@@ -208,7 +209,7 @@
       this.W = root.innerWidth; this.H = root.innerHeight;
       this.cv.width = this.W * this.dpr; this.cv.height = this.H * this.dpr;
     }
-    add(p) { if (this.ps.length < 900) this.ps.push(p); }
+    add(p) { if (this.ps.length < 1600) this.ps.push(p); }
     burst(x, y, color, n, power) {
       for (let i = 0; i < (n || 14); i++) {
         const a = R() * TAU, v = (90 + R() * 260) * (power || 1);
@@ -260,13 +261,50 @@
         this.add({ k: 'streak', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.45 + R() * 0.3, age: 0, s: 2 + R() * 2, c: color, g: 0, drag: 1.5 });
       }
     }
+    // layered centre explosion; power ~ 1 (small win) .. 5 (huge)
+    explode(x, y, power, colors) {
+      const cs = colors || ['#ffe27a', '#ffffff'];
+      const pw = Math.max(0.6, power);
+      this.flare.push({ x, y, age: 0, life: 0.5 + pw * 0.08, r: 120 + pw * 70, c: cs[0] });
+      this.ring(x, y, '#ffffff', 90 + pw * 60, 6);
+      this.ring(x, y, cs[0], 140 + pw * 90, 10);
+      if (pw > 2) setTimeout(() => this.ring(x, y, cs[1] || cs[0], 200 + pw * 80, 8), 120);
+      this.streaks(x, y, cs[0], Math.round(14 + pw * 10));
+      for (let i = 0; i < 30 + pw * 26; i++) {
+        const a = R() * TAU, v = (160 + R() * 520) * (0.7 + pw * 0.15);
+        this.add({ k: R() < 0.35 ? 'star' : 'glow', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.6 + R() * 0.7, age: 0,
+          s: 3 + R() * 5, c: cs[Math.floor(R() * cs.length)], g: 220, drag: 1.8 });
+      }
+    }
+    firework(x, y, col) {
+      const n = 46;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + R() * 0.1, v = 220 + R() * 160;
+        this.add({ k: 'glow', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1 + R() * 0.5, age: 0, s: 3 + R() * 2, c: col, g: 160, drag: 1.6, trail: 1 });
+      }
+      this.flare.push({ x, y, age: 0, life: 0.35, r: 140, c: col });
+    }
+    fireworks(n, colors) {
+      const cs = colors || ['#ff3b5c', '#ffd23f', '#3bff9a', '#3bc8ff', '#c46bff', '#ff8a3b'];
+      for (let i = 0; i < n; i++) setTimeout(() => this.firework(this.W * (0.15 + R() * 0.7), this.H * (0.12 + R() * 0.45), cs[Math.floor(R() * cs.length)]), i * 220 + R() * 150);
+    }
     text(x, y, str, color, size) { this.texts.push({ x, y, str, c: color || '#ffd700', s: size || 26, age: 0, life: 1.5 }); }
     draw(tms, dt) {
       const ctx = this.ctx;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.clearRect(0, 0, this.W, this.H);
-      if (!this.ps.length && !this.texts.length && !this.rings.length) return false;
+      if (!this.ps.length && !this.texts.length && !this.rings.length && !this.flare.length) return false;
       ctx.globalCompositeOperation = 'lighter';
+      for (const f of this.flare) {
+        f.age += dt;
+        const u = f.age / f.life;
+        ctx.globalAlpha = Math.max(0, 1 - u);
+        const r = f.r * (0.4 + U.easeOutCubic(Math.min(1, u)) * 0.9);
+        ctx.drawImage(glow(f.c), f.x - r, f.y - r, r * 2, r * 2);
+        ctx.globalAlpha *= 0.6;
+        ctx.drawImage(glow('#ffffff'), f.x - r * 0.3, f.y - r * 0.3, r * 0.6, r * 0.6);
+      }
+      this.flare = this.flare.filter((f) => f.age < f.life);
       for (const r of this.rings) {
         r.age += dt;
         const u = r.age / r.life;

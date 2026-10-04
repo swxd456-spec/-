@@ -147,7 +147,21 @@
     A.musicBus = ctx.createGain(); A.musicBus.gain.value = A.musicOn ? MUSIC_VOL : 0;
     A.musicDuck = ctx.createGain();
     A.musicFilter = ctx.createBiquadFilter(); A.musicFilter.type = 'lowpass'; A.musicFilter.frequency.value = 20000; A.musicFilter.Q.value = 0.8;
-    A.musicBus.connect(A.musicDuck); A.musicDuck.connect(A.musicFilter); A.musicFilter.connect(A.master);
+    const sat = ctx.createWaveShaper();
+    const curve = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const x = (i / 1023.5) - 1; curve[i] = Math.tanh(x * 1.6) / Math.tanh(1.6); }
+    sat.curve = curve; sat.oversample = '2x';
+    A.musicBus.connect(A.musicDuck); A.musicDuck.connect(sat); sat.connect(A.musicFilter); A.musicFilter.connect(A.master);
+    // stereo chorus on the music bus (two modulated short delays panned apart)
+    [[-0.8, 0.011, 0.31], [0.8, 0.017, 0.23]].forEach(([pan, base, rate]) => {
+      const d = ctx.createDelay(0.05); d.delayTime.value = base;
+      const l = ctx.createOscillator(); l.frequency.value = rate;
+      const lg = ctx.createGain(); lg.gain.value = 0.0035; l.connect(lg); lg.connect(d.delayTime); l.start();
+      const g = ctx.createGain(); g.gain.value = 0.22;
+      const p2 = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+      if (p2.pan) p2.pan.value = pan;
+      A.musicFilter.connect(d); d.connect(g); g.connect(p2); p2.connect(A.master);
+    });
     A.scBus = ctx.createGain(); A.scBus.connect(A.musicBus); // sidechained layers (bass, chords, arps)
     A.sfxBus = ctx.createGain(); A.sfxBus.gain.value = A.sfxOn ? SFX_VOL : 0; A.sfxBus.connect(A.master);
     A.ambBus = ctx.createGain(); A.ambBus.gain.value = A.ambOn ? AMB_VOL : 0; A.ambBus.connect(A.master);
@@ -698,12 +712,24 @@
     }
   }
 
+  // struck-coin model: inharmonic modes with independent decays + tiny impact transient
+  const COIN_MODES = [[1, 1, 0.22], [2.32, 0.55, 0.16], [4.25, 0.32, 0.1], [6.63, 0.18, 0.06], [9.38, 0.1, 0.04]];
   function clink(t, v, dest, pitch) {
-    const f = (2600 + Math.random() * 2400) * (pitch || 1);
-    tone('sine', f, f * 0.995, t, 0.22, v * 0.3, dest, { pan: (Math.random() - 0.5) * 0.8 });
-    tone('sine', f * 1.51, f * 1.5, t, 0.14, v * 0.17, dest);
-    tone('sine', f * 2.43, f * 2.4, t, 0.08, v * 0.1, dest);
-    noise(t, 0.008, v * 0.2, dest, 'highpass', 7000);
+    const ctx = A.ctx;
+    const f0 = (1900 + Math.random() * 1700) * (pitch || 1);
+    const out = ctx.createGain(); out.gain.value = v * 0.32;
+    let node = out;
+    if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = (Math.random() - 0.5) * 0.9; out.connect(p); node = p; }
+    node.connect(dest);
+    COIN_MODES.forEach(([r, a, d]) => {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.value = Math.min(18000, f0 * r * (1 + (Math.random() - 0.5) * 0.012));
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(a, t + 0.0015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d * (0.8 + Math.random() * 0.5));
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + d + 0.1);
+    });
+    noise(t, 0.006, v * 0.25, dest, 'highpass', 6500);
   }
 
   function bellRing(t, dur, v, dest) {
@@ -839,12 +865,53 @@
     if (!sx()) return;
     const t = now();
     const inst = sfxInst();
-    const n = ratio < 1 ? 3 : ratio < 3 ? 5 : 8;
-    for (let i = 0; i < n; i++) play(inst, pNote(i + 2, 1), t + i * 0.06, 0.15, 0.42, fx(), Object.assign({ pan: (i / n - 0.5) * 0.8 }, rv(0.35)));
-    play('celesta', pNote(n + 4, 1), t + n * 0.06, 0.5, 0.3, fx(), rv(0.6));
-    metal(t + n * 0.06, 0.6, 0.04, fx(), 9000, { pitch: 2.4 });
-    const coins = ratio < 1 ? 2 : Math.min(16, 3 + Math.floor(ratio * 2));
-    for (let i = 0; i < coins; i++) clink(t + 0.12 + i * 0.05, 0.55, fx());
+    const tier = ratio < 1 ? 0 : ratio < 3 ? 1 : ratio < 8 ? 2 : 3;
+    const n = [4, 6, 8, 10][tier];
+    // melodic run in the machine's key, doubled an octave up for brightness
+    for (let i = 0; i < n; i++) {
+      const tt = t + i * (tier ? 0.055 : 0.065);
+      play(inst, pNote(i + 2, 1), tt, 0.16, 0.42, fx(), Object.assign({ pan: (i / n - 0.5) * 0.9 }, rv(0.35)));
+      if (tier >= 1) play('celesta', pNote(i + 2, 2), tt + 0.01, 0.12, 0.14, fx(), rv(0.4));
+    }
+    const end = t + n * 0.055;
+    // resolving chord + shimmer
+    [0, 2, 4].forEach((k) => playWide(tier >= 2 ? 'brass' : 'warmpad', sNote(k + 7, tier >= 2 ? 1 : 1), end, 0.5 + tier * 0.25, 0.22 + tier * 0.06, fx(), rv(0.5)));
+    play('bell', pNote(n + 6, 1), end, 0.6, 0.3, fx(), rv(0.7));
+    metal(end, 0.9, 0.05, fx(), 9500, { pitch: 2.4 });
+    if (tier >= 1) { tone('sine', 90, 40, t, 0.35, 0.45 + tier * 0.12, fx()); noise(t, 0.4, 0.15 + tier * 0.05, fx(), 'bandpass', 600, 1, Object.assign({ sweep: 8000 }, rv(0.4))); }
+    if (tier >= 2) DRUM.crash(end, 0.6, fx());
+    const coins = tier === 0 ? 3 : Math.min(26, 5 + Math.floor(ratio * 2.4));
+    for (let i = 0; i < coins; i++) clink(t + 0.08 + i * (0.035 + Math.random() * 0.03), 0.55, fx(), 0.9 + Math.random() * 0.25);
+  };
+
+  A.leverTick = function (k) {
+    if (!sx()) return;
+    const t = now();
+    tone('square', 1300 + k * 90, 900, t, 0.02, 0.05, fx());
+    noise(t, 0.014, 0.22, fx(), 'bandpass', 2600 + k * 200, 4);
+    tone('sine', 220, 120, t, 0.05, 0.12, fx());
+  };
+  A.leverPull = function () {
+    if (!sx()) return;
+    const t = now();
+    for (let k = 0; k < 6; k++) A.leverTick && setTimeout(() => A.leverTick(k), k * 38);
+    noise(t, 0.3, 0.12, fx(), 'bandpass', 600, 1, { sweep: 1600, attack: 0.05 });
+  };
+  A.leverRelease = function () {
+    if (!sx()) return;
+    const t = now();
+    // heavy clunk + spring boing
+    tone('sine', 140, 40, t, 0.25, 0.8, fx());
+    noise(t, 0.05, 0.45, fx(), 'bandpass', 900, 1.5);
+    noise(t, 0.12, 0.2, fx(), 'lowpass', 400);
+    const o = A.ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(320, t + 0.03);
+    const l = A.ctx.createOscillator(); l.frequency.value = 26;
+    const lg = A.ctx.createGain(); lg.gain.setValueAtTime(90, t); lg.gain.exponentialRampToValueAtTime(1, t + 0.6);
+    l.connect(lg); lg.connect(o.frequency);
+    const g = A.ctx.createGain(); g.gain.setValueAtTime(0.0001, t + 0.03); g.gain.linearRampToValueAtTime(0.09, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    o.connect(g); g.connect(fx());
+    o.start(t); l.start(t); o.stop(t + 0.7); l.stop(t + 0.7);
   };
 
   A.lineFlash = function (i) { if (!sx()) return; play('celesta', pNote(i % 8 + 3, 1), now(), 0.08, 0.16, fx(), rv(0.3)); };

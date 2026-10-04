@@ -59,7 +59,104 @@
     return t;
   }
 
+  const TMPS = {};
+  function scratch(name, w, h) {
+    let c = TMPS[name];
+    if (!c) c = TMPS[name] = document.createElement('canvas');
+    if (c.width < w || c.height < h) { c.width = Math.max(c.width, w); c.height = Math.max(c.height, h); }
+    const t = c.getContext('2d');
+    t.setTransform(1, 0, 0, 1, 0, 0);
+    t.globalCompositeOperation = 'source-over';
+    t.clearRect(0, 0, c.width, c.height);
+    return [c, t];
+  }
+
   /* ---------- primitives ---------- */
+  // illustration-style emoji: drop shadow + solid outline + optional colour glow
+  function emojiArt(g, e, cx, cy, size, opt) {
+    opt = opt || {};
+    const dpr = g.getTransform().a || 1;
+    const S = Math.ceil(size * 1.6 * dpr);
+    const [ca, a] = scratch('a', S, S);
+    a.font = `${size * dpr}px ${EMOJI}`;
+    a.textAlign = 'center'; a.textBaseline = 'middle';
+    a.fillText(e, S / 2, S / 2 + size * dpr * 0.06);
+    const [cb, b] = scratch('b', S, S);
+    b.drawImage(ca, 0, 0);
+    b.globalCompositeOperation = 'source-in';
+    b.fillStyle = opt.outline || 'rgba(12,6,24,0.92)';
+    b.fillRect(0, 0, S, S);
+    const x = cx - size * 0.8, y = cy - size * 0.8, w = size * 1.6;
+    const src = (c) => [c, 0, 0, S, S];
+    g.save();
+    if (opt.glow) { g.shadowColor = opt.glow; g.shadowBlur = size * 0.35; }
+    else { g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = size * 0.14; g.shadowOffsetY = size * 0.07; }
+    g.drawImage(...src(cb), x, y + (opt.glow ? 0 : size * 0.02), w, w);
+    g.restore();
+    const ow = size * (opt.ow || 0.042);
+    for (let i = 0; i < 12; i++) {
+      const an = (i / 12) * Math.PI * 2;
+      g.drawImage(...src(cb), x + Math.cos(an) * ow, y + Math.sin(an) * ow, w, w);
+    }
+    g.drawImage(...src(ca), x, y, w, w);
+    // soft top light
+    const [cc, c] = scratch('c', S, S);
+    c.drawImage(ca, 0, 0);
+    c.globalCompositeOperation = 'source-atop';
+    const lg = c.createLinearGradient(0, S * 0.2, 0, S * 0.6);
+    lg.addColorStop(0, 'rgba(255,255,255,0.28)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = lg; c.fillRect(0, 0, S, S);
+    g.drawImage(...src(cc), x, y, w, w);
+  }
+
+  function plate(g, kind, cx, cy, r, col, th, top) {
+    if (kind === 'ring') {
+      const f = g.createRadialGradient(cx, cy - r * 0.3, r * 0.1, cx, cy, r);
+      f.addColorStop(0, U.rgba(col, 0.42)); f.addColorStop(0.7, 'rgba(0,0,0,0.45)'); f.addColorStop(1, 'rgba(0,0,0,0.6)');
+      g.beginPath(); g.arc(cx, cy, r * 0.92, 0, 6.283); g.fillStyle = f; g.fill();
+      g.save();
+      g.shadowColor = col; g.shadowBlur = r * 0.45;
+      g.strokeStyle = col; g.lineWidth = r * 0.075;
+      g.beginPath(); g.arc(cx, cy, r * 0.9, 0, 6.283); g.stroke();
+      g.restore();
+      g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = Math.max(1, r * 0.022);
+      g.beginPath(); g.arc(cx, cy, r * 0.9, 0, 6.283); g.stroke();
+      if (top) for (let i = 0; i < 4; i++) { const an = -Math.PI / 2 + i * Math.PI / 2; star4(g, cx + Math.cos(an) * r * 0.9, cy + Math.sin(an) * r * 0.9, r * 0.16, 1); }
+      return;
+    }
+    const rim = RIMS[th.rim || 'gold'];
+    g.save();
+    g.shadowColor = 'rgba(0,0,0,0.65)'; g.shadowBlur = r * 0.22; g.shadowOffsetY = r * 0.08;
+    g.beginPath(); g.arc(cx, cy, r, 0, 6.283);
+    g.fillStyle = grad(g, cx - r, cy - r, cx + r, cy + r, [rim[0], [0.3, rim[1]], [0.62, rim[2]], rim[3]]);
+    g.fill();
+    g.restore();
+    // engraved groove
+    g.beginPath(); g.arc(cx, cy, r * 0.88, 0, 6.283);
+    g.fillStyle = grad(g, 0, cy - r, 0, cy + r, [rim[2], rim[1], rim[0]]); g.fill();
+    // inner field
+    const f = g.createRadialGradient(cx - r * 0.25, cy - r * 0.35, r * 0.05, cx, cy, r * 0.82);
+    f.addColorStop(0, U.shade(col, 0.15)); f.addColorStop(0.55, U.shade(col, -0.45)); f.addColorStop(1, U.shade(col, -0.82));
+    g.beginPath(); g.arc(cx, cy, r * 0.8, 0, 6.283); g.fillStyle = f; g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = r * 0.05; g.stroke();
+    // glass dome highlight
+    g.save();
+    g.beginPath(); g.arc(cx, cy, r * 0.78, 0, 6.283); g.clip();
+    const hg = g.createLinearGradient(0, cy - r * 0.8, 0, cy);
+    hg.addColorStop(0, 'rgba(255,255,255,0.32)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = hg;
+    g.beginPath(); g.ellipse(cx, cy - r * 0.42, r * 0.7, r * 0.42, 0, 0, 6.283); g.fill();
+    g.restore();
+    // rivets / jewels on the rim
+    const n = top ? 4 : 8;
+    for (let i = 0; i < n; i++) {
+      const an = -Math.PI / 2 + (i / n) * Math.PI * 2;
+      const px = cx + Math.cos(an) * r * 0.94, py = cy + Math.sin(an) * r * 0.94;
+      if (top) gem(g, 'round', i % 2 ? th.accent2 || '#3aa0ff' : '#ff3b5c', px, py, r * 0.26, true);
+      else { g.beginPath(); g.arc(px, py, r * 0.035, 0, 6.283); g.fillStyle = rim[0]; g.fill(); }
+    }
+  }
+
   function emoji(g, e, cx, cy, size, shadow) {
     g.save();
     g.font = `${size}px ${EMOJI}`;
@@ -78,6 +175,10 @@
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineJoin = 'round';
     const y = cy + fs * 0.04;
+    // colour glow
+    g.shadowColor = U.rgba(col, 0.75); g.shadowBlur = size * 0.32;
+    g.strokeStyle = U.rgba(col, 0.6); g.lineWidth = size * 0.2;
+    g.strokeText(L, cx, y);
     // shadow + dark outline
     g.shadowColor = 'rgba(0,0,0,0.7)'; g.shadowBlur = size * 0.14; g.shadowOffsetY = size * 0.07;
     g.strokeStyle = U.shade(col, -0.82); g.lineWidth = size * 0.17;
@@ -144,11 +245,11 @@
     for (let i = 0; i < n; i++) { const a = a0 + (i / n) * Math.PI * 2; p.push([Math.cos(a) * sx, Math.sin(a) * sy]); }
     return p;
   }
-  function gem(g, shape, col, cx, cy, size) {
+  function gem(g, shape, col, cx, cy, size, small) {
     const r = size * 0.46;
     const P = (SHAPES[shape] || SHAPES.round)().map(([x, y]) => [cx + x * r, cy + y * r]);
     const T = P.map(([x, y]) => [cx + (x - cx) * 0.52, cy - r * 0.06 + (y - cy) * 0.52]);
-    aura(g, cx, cy, size * 0.62, col, 0.55);
+    if (!small) aura(g, cx, cy, size * 0.62, col, 0.55);
     g.save();
     g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = size * 0.12; g.shadowOffsetY = size * 0.06;
     g.beginPath(); P.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath();
@@ -178,7 +279,7 @@
     g.fillStyle = '#ffffff';
     g.beginPath(); g.ellipse(cx - r * 0.28, cy - r * 0.32, r * 0.22, r * 0.09, -0.6, 0, 6.283); g.fill();
     g.restore();
-    star4(g, cx + r * 0.42, cy - r * 0.5, size * 0.1, 1);
+    if (!small) star4(g, cx + r * 0.42, cy - r * 0.5, size * 0.1, 1);
   }
 
   function orb(g, col, cx, cy, size) {
@@ -301,14 +402,26 @@
       case 'bar': bar(g, +k.v.slice(3) || 1, cx, cy, size * 0.82); break;
       case 'gem': gem(g, k.sh, k.c, cx, cy, size * 0.95); break;
       case 'orb': orb(g, k.c, cx, cy, size * 0.95); break;
-      default:
-        if (th.symAura !== false) aura(g, cx, cy, size * 0.58, col, sym.tier >= m.normalCount - 3 ? 0.55 : 0.35);
-        emoji(g, k.v, cx, cy, size * 0.66);
+      default: {
+        const high = sym.type === 'normal' && sym.tier >= m.normalCount - 3;
+        const top = sym.type === 'normal' && sym.tier === m.normalCount - 1;
+        const outline = th.outline || (th.light ? '#ffffff' : 'rgba(12,6,24,0.92)');
+        if (th.plate && high) {
+          aura(g, cx, cy, size * 0.62, col, top ? 0.75 : 0.5);
+          plate(g, th.plate, cx, cy, size * 0.43, col, th, top);
+          emojiArt(g, k.v, cx, cy, size * 0.5, { outline, ow: 0.035 });
+          if (top) star4(g, cx + size * 0.3, cy - size * 0.3, size * 0.09, 1);
+        } else {
+          aura(g, cx, cy, size * 0.58, col, high ? 0.6 : 0.35);
+          emojiArt(g, k.v, cx, cy, size * 0.62, { outline });
+          if (top) star4(g, cx + size * 0.28, cy - size * 0.28, size * 0.08, 1);
+        }
+      }
     }
   }
 
   const Art = {
-    parse, tierColor, RIMS,
+    parse, tierColor, RIMS, emojiArt, plate,
     draw(g, m, s, w, h) {
       const sym = m.symbols[s];
       const th = m.theme;
@@ -317,9 +430,12 @@
       if (sym.type === 'wild' || sym.type === 'scatter' || sym.type === 'bonus') {
         const col = sym.type === 'wild' ? th.accent : sym.type === 'scatter' ? th.accent2 : '#ffb000';
         const label = sym.type === 'wild' ? 'WILD' : sym.type === 'bonus' ? 'BONUS' : (th.scatterLabel || (m.mech === 'cluster' || m.mech === 'scatter' ? 'FREE' : 'SCATTER'));
-        aura(g, cx, cy - size * 0.06, size * 0.62, col, 0.75);
+        aura(g, cx, cy - size * 0.06, size * 0.66, col, 0.85);
         const k = parse(sym.e);
-        if (k.kind === 'emoji') emoji(g, k.v, cx, cy - size * 0.1, size * 0.58);
+        if (k.kind === 'emoji') {
+          plate(g, 'ring', cx, cy - size * 0.1, size * 0.36, col, th, sym.type === 'wild');
+          emojiArt(g, k.v, cx, cy - size * 0.1, size * 0.5, { outline: 'rgba(12,6,24,0.9)', ow: 0.035 });
+        }
         else drawCore(g, m, s, cx, cy - size * 0.1, size * 0.8);
         const bh = Math.max(10, size * 0.24);
         banner(g, label, cx, cy + size * 0.3, Math.min(w * 0.98, size * 1.02), bh, col, th);

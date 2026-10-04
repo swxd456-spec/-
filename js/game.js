@@ -82,7 +82,14 @@
         msg: q('.js-msg'), bet: q('.js-bet'), win: q('.js-win'), winBox: q('.dock-stat.win'), spin: q('.js-spin'),
         spinLabel: q('.js-spin-label'), turbo: q('.js-turbo'), auto: q('.js-auto'), autoLabel: q('.js-auto-label'),
         autoMenu: q('.js-auto-menu'), betUp: q('.js-bet-up'), betDown: q('.js-bet-down'), stage: q('.js-stage'),
+        banner: q('.js-banner'), wbLabel: q('.js-wb-label'), wbAmt: q('.js-wb-amt'), lever: q('.js-lever'),
+        shaft: q('.js-lever-shaft'), knob: q('.js-lever-knob'), pullHint: q('.js-pull-hint'),
       };
+      this.hasLever = !!th.lever;
+      this.ui.lever.classList.toggle('hidden', !this.hasLever);
+      this.ui.spin.classList.toggle('hidden', this.hasLever);
+      this.ui.pullHint.classList.toggle('hidden', !this.hasLever);
+      this.hideBanner();
       const vars = {
         '--accent': th.accent, '--accent2': th.accent2, '--frame1': th.frame[0], '--frame2': th.frame[1],
         '--title-font': `'${th.font}', 'Bungee', sans-serif`,
@@ -101,6 +108,8 @@
       const ac = (this.ac = new AbortController());
       const on = (t, ev, fn) => t.addEventListener(ev, fn, { signal: ac.signal });
       on(this.ui.spin, 'click', () => this.spin(true));
+      if (this.hasLever) this.setupLever(on);
+      on(this.ui.pullHint, 'click', () => this.trigger());
       on(this.ui.betUp, 'click', () => this.changeBet(1));
       on(this.ui.betDown, 'click', () => this.changeBet(-1));
       on(this.ui.turbo, 'click', () => { this.turbo = !this.turbo; U.store.set('turbo', this.turbo); A.click(); this.refreshUi(); });
@@ -120,7 +129,7 @@
         this.ui.autoMenu.classList.add('hidden');
         this.auto = n;
         this.refreshUi();
-        if (!this.busy) { this.auto--; this.spin(); }
+        if (!this.busy) { this.auto--; if (this.hasLever) this.pullLever(false); else this.spin(); }
       });
       on(document, 'click', () => this.ui.autoMenu.classList.add('hidden'));
       on(el.querySelector('.js-pay'), 'click', () => { A.click(); this.paytable(); });
@@ -130,10 +139,11 @@
         if (e.code === 'Space' || e.code === 'Enter') {
           if (document.querySelector('#overlays .ov')) return;
           e.preventDefault();
-          if (!e.repeat) this.spin(true);
+          if (!e.repeat) this.trigger();
         }
       });
       on(this.ui.cv, 'click', () => { if (this.busy) this.hurry(); });
+      on(this.ui.banner, 'click', () => { if (this.busy) this.hurry(); });
 
       A.setMachine(m);
       A.playMusic(m);
@@ -156,22 +166,136 @@
       document.getElementById('overlays').innerHTML = '';
       this.el.classList.add('hidden');
       this.ui.autoMenu.classList.add('hidden');
+      this.ui.spin.classList.remove('hidden');
+      this.ui.lever.classList.add('hidden');
+      this.ui.pullHint.classList.add('hidden');
+      this.hideBanner();
+    }
+
+    /* ---------- pull lever ---------- */
+    trigger() {
+      if (this.hasLever && !this.busy) this.pullLever(); else this.spin(true);
+    }
+    setLever(p) {
+      this.leverP = p;
+      const L = this.ui.lever.clientHeight * 0.42;
+      const piv = this.ui.lever.clientHeight * 0.62;
+      const th = p * Math.PI * 0.86;
+      const dy = Math.cos(th) * L;
+      const sc = 1 + 0.28 * Math.sin(th);
+      this.ui.shaft.style.top = (piv - Math.max(dy, 0)) + 'px';
+      this.ui.shaft.style.height = Math.max(4, Math.abs(dy)) + 'px';
+      this.ui.shaft.style.width = (10 * (1 + 0.35 * Math.sin(th))) + 'px';
+      this.ui.knob.style.transform = `translate(-50%, -50%) translateY(${piv - dy}px) scale(${sc})`;
+    }
+    animateLever(from, to, ms, ease) {
+      return new Promise((res) => {
+        const t0 = performance.now();
+        const st = () => {
+          const u = Math.min(1, (performance.now() - t0) / ms);
+          this.setLever(from + (to - from) * (ease ? ease(u) : u));
+          if (u < 1) requestAnimationFrame(st); else res();
+        };
+        st();
+      });
+    }
+    async pullLever(user = true) {
+      if (this.leverBusy) return;
+      this.leverBusy = true;
+      A.leverPull && A.leverPull();
+      await this.animateLever(this.leverP || 0, 1, 260, U.easeInCubic);
+      A.leverRelease && A.leverRelease();
+      this.spin(user);
+      await this.animateLever(1, 0, 700, U.easeOutElastic);
+      this.leverBusy = false;
+    }
+    setupLever(on) {
+      const lv = this.ui.lever;
+      this.setLever(0);
+      requestAnimationFrame(() => this.setLever(0));
+      let drag = null;
+      on(lv, 'pointerdown', (e) => {
+        e.preventDefault();
+        if (this.busy) { this.hurry(); return; }
+        if (this.leverBusy) return;
+        lv.setPointerCapture(e.pointerId);
+        drag = { y0: e.clientY, p: 0, moved: false, ticks: 0 };
+        lv.classList.add('grab');
+      });
+      on(lv, 'pointermove', (e) => {
+        if (!drag) return;
+        const dy = e.clientY - drag.y0;
+        if (Math.abs(dy) > 6) drag.moved = true;
+        drag.p = U.clamp(dy / (lv.clientHeight * 0.7), 0, 1);
+        this.setLever(drag.p);
+        const tk = Math.floor(drag.p * 6);
+        if (tk > drag.ticks) { drag.ticks = tk; A.leverTick && A.leverTick(tk); }
+        if (drag.p >= 1) { const d = drag; drag = null; lv.classList.remove('grab'); this.finishPull(d); }
+      });
+      const up = () => {
+        if (!drag) return;
+        const d = drag; drag = null;
+        lv.classList.remove('grab');
+        this.finishPull(d);
+      };
+      on(lv, 'pointerup', up);
+      on(lv, 'pointercancel', up);
+      on(lv, 'keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); this.trigger(); } });
+    }
+    async finishPull(d) {
+      if (!d.moved || d.p > 0.4) { this.pullLever(); return; }
+      await this.animateLever(d.p, 0, 400, U.easeOutBack);
+    }
+
+    /* ---------- centre win banner ---------- */
+    hideBanner() {
+      this.bannerOn = false;
+      this.ui.banner.className = 'win-banner js-banner';
+    }
+    showBanner(amount, ratio, label) {
+      const lab = label || (ratio >= 8 ? 'SUPER WIN' : ratio >= 4 ? 'GREAT WIN' : ratio >= 1.5 ? 'NICE WIN' : 'WIN');
+      const tier = ratio >= 8 ? 't3' : ratio >= 4 ? 't2' : ratio >= 1.5 ? 't1' : 't0';
+      if (!this.bannerOn || this.ui.wbLabel.textContent !== lab) {
+        this.ui.wbLabel.textContent = lab;
+        this.ui.banner.className = 'win-banner js-banner show ' + tier;
+        void this.ui.banner.offsetWidth;
+        this.ui.banner.classList.add('pop');
+      }
+      this.bannerOn = true;
+      this.ui.wbAmt.textContent = U.fmt(amount);
+    }
+    centerBurst(ratio) {
+      const th = this.m.theme, fx = this.app.fx;
+      const [cx, cy] = this.reelsCenter();
+      const power = U.clamp(Math.log2(ratio + 1) * 1.25, 0.7, 5);
+      fx.explode(cx, cy, power, [th.accent, '#ffffff', th.accent2, '#ffe27a']);
+      if (ratio >= 1.2) fx.coins(Math.min(60, Math.round(8 + ratio * 4)), cx, cy, 80);
+      if (ratio >= 4) { this.screenFlash(); this.shake(); }
+      if (ratio >= 8) fx.fireworks(3, [th.accent, th.accent2, '#ffe27a']);
     }
 
     layout() {
       if (this.dead) return;
       const m = this.m, ui = this.ui;
       const fpad = parseFloat(getComputedStyle(ui.frame).paddingLeft) * 2 || 14;
-      const availW = ui.stage.clientWidth - 24 - fpad;
+      const availW = ui.stage.clientWidth - 24 - fpad - (this.hasLever ? Math.max(40, Math.min(72, ui.stage.clientWidth * 0.11)) + 8 : 0);
       const availH = ui.stage.clientHeight - 12 - fpad;
       const rows = m.mech === 'megaways' ? m.maxRows * 0.62 : m.rows === 1 ? 1.15 : m.rows;
       const aspect = m.reels / rows;
       let w = Math.min(availW, availH * aspect, 1100);
       w = Math.max(160, w);
-      const h = w / aspect;
+      // portrait phones: let rows grow taller to use the vertical space
+      const tall = innerHeight > innerWidth * 1.3 && m.mech !== 'megaways' ? 1.3 : 1;
+      const h = Math.max(w / aspect, Math.min(availH, (w / aspect) * tall));
       ui.cv.style.width = Math.floor(w) + 'px';
       ui.cv.style.height = Math.floor(h) + 'px';
       this.R.resize();
+      if (this.hasLever) {
+        const lh = Math.max(160, Math.min(h * 0.95, 420));
+        ui.lever.style.height = lh + 'px';
+        ui.lever.style.width = Math.max(40, Math.min(72, ui.stage.clientWidth * 0.11)) + 'px';
+        this.setLever(this.leverP || 0);
+      }
     }
 
     /* ---------- ui helpers ---------- */
@@ -225,7 +349,8 @@
           const u = Math.min(1, (performance.now() - t0) / ms);
           const v = from + (to - from) * U.easeOutCubic(u);
           this.setWin(Number.isInteger(to) ? Math.round(v) : v);
-          if (u < 1) requestAnimationFrame(st); else { this.setWin(to, true); res(); }
+          if (this.bannerOn) this.ui.wbAmt.textContent = U.fmt(Math.round(v));
+          if (u < 1) requestAnimationFrame(st); else { this.setWin(to, true); if (this.bannerOn) this.ui.wbAmt.textContent = U.fmt(to); res(); }
         };
         st();
       });
@@ -301,6 +426,7 @@
       this.lastWins = [];
       this.R.setHighlight(null);
       this.ui.frame.classList.remove('win');
+      this.hideBanner();
       this.ui.spin.classList.add('spinning');
       this.cas = { idx: 0, mult: this.fs && m.feat.cascade && m.feat.cascade.step ? this.fs.prog : 1 };
       if (!this.fs) this.setWin(0);
@@ -317,11 +443,12 @@
       this.ui.spin.classList.remove('spinning');
       this.refreshUi();
       if (this.lastWins.length) this.startCycle();
-      if (this.fs) this.nextTimer = setTimeout(() => this.spin(), this.turbo ? 350 : 800);
+      const next = () => (this.hasLever ? this.pullLever(false) : this.spin());
+      if (this.fs) this.nextTimer = setTimeout(next, this.turbo ? 350 : 800);
       else if (this.auto > 0) {
         this.auto--;
         this.refreshUi();
-        this.nextTimer = setTimeout(() => this.spin(), this.turbo ? 250 : 650);
+        this.nextTimer = setTimeout(next, this.turbo ? 250 : 650);
       }
     }
 
@@ -392,6 +519,8 @@
         A.powerUp();
         this.toast(`${U.fmt(out.preBombTotal)} × ${out.appliedMult}`);
         await this.wait(750);
+        this.showBanner(shown, out.total / bet);
+        this.centerBurst(out.total / bet);
         await this.countWin(shown, out.total - (out.scatterWin || 0), 700);
         shown = out.total - (out.scatterWin || 0);
       }
@@ -399,6 +528,7 @@
         this.R.setHighlight(out.scatter.positions, null, th.accent2);
         A.win(out.scatterWin / bet);
         this.floatAt(out.scatter.positions, out.scatterWin);
+        this.showBanner(shown, (shown + out.scatterWin) / bet);
         await this.countWin(shown, shown + out.scatterWin, 500);
         shown += out.scatterWin;
         await this.wait(700);
@@ -411,7 +541,8 @@
         this.setWin(this.fs ? this.fs.win : out.total, true);
         if (ratio >= BIG[0][0]) await this.bigWin(out.total, bet);
         this.app.refresh(true);
-        this.setMsg(`<span class="big">WIN ${U.fmt(out.total)}</span>`);
+        this.showBanner(out.total, ratio);
+        this.setMsg('');
         this.lastWins = m.feat.cascade ? [] : out.steps[0].wins.slice();
       } else {
         this.app.refresh();
@@ -518,17 +649,21 @@
       st.wins.forEach((w) => { all.push(...w.positions); if (w.kind === 'line') lines.push(w.line); });
       this.R.setHighlight(all, lines.length ? lines : null, th.accent, { frames: !lines.length });
       A.win(st.win / bet);
-      st.wins.slice(0, 8).forEach((w) => this.floatAt(w.positions, w.amount));
       const seen = new Set();
       all.forEach(([r, row]) => {
         const k = r + ',' + row;
-        if (seen.has(k) || seen.size > 18) return;
+        if (seen.has(k) || seen.size > 20) return;
         seen.add(k);
         const [x, y] = this.R.pageXY(r, row);
-        fx.winBurst(x, y, th.winFx, this.R.tierColor(this.R.reels[r].cells[row] ? this.R.reels[r].cells[row].c.s : 0), 4);
+        const col = this.R.tierColor(this.R.reels[r].cells[row] ? this.R.reels[r].cells[row].c.s : 0);
+        fx.winBurst(x, y, th.winFx, col, 9);
+        fx.ring(x, y, col, Math.min(this.R.rw, this.R.cellH(r)) * 0.9, 5);
       });
-      if (st.win / bet >= 3) { const [cx, cy] = this.reelsCenter(); fx.coins(Math.min(30, Math.round(st.win / bet * 2)), cx, cy + 40, 120); }
-      await this.countWin(base, base + st.win, this.turbo ? 300 : 550);
+      const ratio = (base + st.win) / bet;
+      this.centerBurst(st.win / bet);
+      this.showBanner(base, ratio);
+      await this.countWin(base, base + st.win, this.turbo ? 350 : 650);
+      this.showBanner(base + st.win, ratio);
       if (st.mult > 1) this.setMsg(`<span class="big">x${st.mult}</span>&nbsp;<span class="sub">배수 적용!</span>`);
       await this.wait(m.feat.cascade ? 650 : 1000);
     }
@@ -642,6 +777,9 @@
         A.bigWin(topIdx + 1);
         A.rollup(dur, true);
         fx.confetti(60 + topIdx * 40);
+        fx.fireworks(5);
+        fx.explode(innerWidth / 2, innerHeight * 0.45, 3, ['#ffe27a', '#ffffff', this.m.theme.accent]);
+        const fwTimer = setInterval(() => fx.fireworks(1 + level), 900);
         this.shake();
         const setLevel = (i) => {
           ti.textContent = BIG[i][1];
@@ -662,6 +800,7 @@
           if (closing) return;
           closing = true;
           clearInterval(coinTimer);
+          clearInterval(fwTimer);
           A.bigWinEnd();
           this.closeOverlay(d).then(res);
         };
@@ -675,6 +814,9 @@
             level = lv; setLevel(lv);
             A.tierUp(lv);
             fx.confetti(50);
+            fx.fireworks(4 + lv * 2);
+            fx.explode(innerWidth / 2, innerHeight * 0.45, 3 + lv, ['#ffe27a', '#ffffff', this.m.theme.accent]);
+            this.shake();
             fx.streaks(innerWidth / 2, innerHeight * 0.45, '#ffffff', 26);
             this.screenFlash();
           }
@@ -688,6 +830,7 @@
     /* ---------- hold & win ---------- */
     async runHoldWin(out, bet) {
       const m = this.m, fx = this.app.fx;
+      this.hideBanner();
       const coins = E.countSym(out.landGrid, m.coinIdx);
       this.R.setHighlight(coins.positions, null, '#ffcc33', { frames: true });
       coins.positions.forEach(([r, row]) => { const [x, y] = this.R.pageXY(r, row); fx.burst(x, y, '#ffcc33', 20, 1.2); });
@@ -753,12 +896,13 @@
       this.fsMusic(false);
       this.updateInfo();
       this.app.refresh(true);
-      this.setMsg(`<span class="big">BONUS WIN ${U.fmt(total)}</span>`);
+      this.showBanner(total, total / bet, 'BONUS WIN');
     }
 
     /* ---------- bonus wheel ---------- */
     async runWheel(out, bet) {
       const m = this.m, th = m.theme, fx = this.app.fx;
+      this.hideBanner();
       this.R.setHighlight(out.bonus.positions, null, '#ffcc33', { frames: true });
       out.bonus.positions.forEach(([r, row]) => { const [x, y] = this.R.pageXY(r, row); fx.burst(x, y, '#ffcc33', 20, 1.2); });
       A.featureTrigger();
@@ -870,7 +1014,7 @@
       this.setWin(amount, true);
       if (amount / bet >= BIG[0][0]) await this.bigWin(amount, bet);
       this.app.refresh(true);
-      this.setMsg(`<span class="big">BONUS WIN ${U.fmt(amount)}</span>`);
+      this.showBanner(amount, amount / bet, 'BONUS WIN');
     }
 
     /* ---------- paytable ---------- */
