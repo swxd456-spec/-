@@ -1,37 +1,36 @@
-/* App shell: lobby, routing, wallet, sound settings and the main render loop. */
+/* App shell: lobby (hero carousel + poster grid), routing, wallet, sound settings, render loop. */
 (function (root) {
-  const U = root.U, A = root.SlotAudio, E = root.SlotEngine;
+  const U = root.U, A = root.SlotAudio, E = root.SlotEngine, Art = root.SlotArt;
   const START = 10000;
   const LOBBY_MUSIC = { id: 'lobby', music: { style: 'bossa', root: 53, scale: 'major', bpm: 116 }, sfx: { inst: 'bell' } };
-  const LOBBY_THEME = { bg: ['#07031a', '#1a0b3a', '#3a0f4f'], fx: 'sparkles', accent: '#ff4fd8', accent2: '#00e5ff' };
+  const LOBBY_THEME = { bg: ['#07031a', '#1a0b3a', '#3a0f4f'], shader: 'bokeh', sc: ['#06021a', '#7a2bd6', '#ffb347'], fx: 'sparkles', accent: '#ff4fd8', accent2: '#00e5ff' };
+  const FEATURED = ['olympus', 'neon-nights', 'dragon-fortune', 'galaxy-ways', 'sweet-candy'];
 
   const FILTERS = [
-    ['all', '전체'], ['classic', '클래식 3릴'], ['lines', '페이라인'], ['ways', '웨이즈'], ['megaways', '메가웨이즈'],
-    ['cluster', '클러스터'], ['tumble', '텀블·캐스케이드'], ['fs', '프리스핀'], ['holdWin', '홀드 앤 윈'], ['wheel', '보너스 휠'],
+    ['all', '전체'], ['classic', '클래식'], ['lines', '페이라인'], ['ways', '웨이즈'], ['megaways', '메가웨이즈'],
+    ['cluster', '클러스터'], ['tumble', '텀블'], ['holdWin', '홀드 앤 윈'], ['wheel', '보너스 휠'], ['fs', '프리스핀'],
   ];
 
   function tags(cfg) {
     const t = [];
     const f = cfg.feat || {};
-    const grid = cfg.mech === 'megaways' ? `${cfg.reels}×${cfg.minRows}-${cfg.maxRows}` : `${cfg.reels}×${cfg.rows}`;
+    const grid = cfg.mech === 'megaways' ? `${cfg.reels}×2-7` : `${cfg.reels}×${cfg.rows}`;
     const mech = { lines: `${cfg.lines}라인`, ways: `${U.fmt(Math.pow(cfg.rows, cfg.reels))} 웨이즈`, megaways: '메가웨이즈', cluster: '클러스터', scatter: '스캐터 페이' }[cfg.mech];
     t.push(['mech', mech], ['', grid]);
-    if (cfg.scatter) t.push(['', '프리스핀']);
     if (cfg.coin) t.push(['', '홀드&윈']);
     if (cfg.bonus) t.push(['', '보너스 휠']);
     if (f.expanding) t.push(['', '확장 와일드']);
-    if (f.sticky) t.push(['', '스티키 와일드']);
+    if (f.sticky) t.push(['', '스티키']);
     if (cfg.wild && cfg.wild.mult) t.push(['', '배수 와일드']);
     if (f.wildReels) t.push(['', '와일드 릴']);
     if (f.cascade) t.push(['', f.cascade.step ? '무한 배수' : '텀블']);
     if (cfg.bomb) t.push(['', '배수 폭탄']);
+    if (cfg.scatter) t.push(['', '프리스핀']);
     return t;
   }
-
   function matches(cfg, k) {
     const f = cfg.feat || {};
     switch (k) {
-      case 'all': return true;
       case 'classic': return cfg.reels === 3;
       case 'lines': return cfg.mech === 'lines';
       case 'ways': return cfg.mech === 'ways';
@@ -44,19 +43,26 @@
     }
     return true;
   }
+  function badge(c) {
+    return c.coin ? 'JACKPOT' : c.mech === 'megaways' ? 'MEGAWAYS' : c.bonus ? 'BONUS WHEEL' : c.bomb ? 'x100 MULTI' : c.reels === 3 ? 'CLASSIC' : (c.feat || {}).cascade ? 'TUMBLE' : '';
+  }
 
   const App = {
     balance: U.store.get('balance', START),
     game: null,
     filter: 'all',
+    posters: {},
 
     init() {
-      this.bg = new root.SlotBackground(document.getElementById('bg'));
+      this.shader = new root.ShaderBG(document.getElementById('bgl'));
+      this.amb = new root.SlotAmbient(document.getElementById('amb'));
       this.fx = new root.SlotFx(document.getElementById('fx'));
-      this.bg.setTheme(LOBBY_THEME);
+      this.setTheme(LOBBY_THEME);
       A.musicOn = U.store.get('snd.music', true);
       A.sfxOn = U.store.get('snd.sfx', true);
       A.ambOn = U.store.get('snd.amb', true);
+      this.prepared = {};
+      root.MACHINES.forEach((c) => { this.prepared[c.id] = E.prepare(c, root.SLOT_CALIBRATION); });
       this.buildLobby();
       this.bindSound();
       this.refresh();
@@ -65,7 +71,7 @@
         A.init();
         if (A.ready) {
           document.getElementById('tap-hint').classList.add('hidden');
-          if (first && !this.game) A.playMusic(LOBBY_MUSIC);
+          if (first && !this.game) { A.setMachine(LOBBY_MUSIC); A.playMusic(LOBBY_MUSIC); }
         }
       };
       ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => document.addEventListener(ev, unlock, { passive: true }));
@@ -75,12 +81,20 @@
       const frame = (t) => {
         const dt = Math.min(0.05, (t - last) / 1000);
         last = t;
-        this.bg.draw(t, dt);
+        this.shader.draw(t, dt);
+        this.amb.draw(t, dt);
         if (this.game && this.game.R) this.game.R.draw(t);
         this.fx.draw(t, dt);
         requestAnimationFrame(frame);
       };
       requestAnimationFrame(frame);
+      const ready = document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, U.wait(2500)]) : Promise.resolve();
+      ready.then(() => this.makePosters());
+    },
+
+    setTheme(th) {
+      this.shader.setTheme(th);
+      this.amb.setTheme(th);
     },
 
     /* ---------- wallet ---------- */
@@ -97,14 +111,14 @@
     lowBalance() {
       const d = document.createElement('div');
       d.className = 'ov modal';
-      d.innerHTML = `<div class="modal-box" style="text-align:center"><div style="font-size:60px">🪙</div>
-        <h3>코인이 부족해요</h3><p>무료 코인 ${U.fmt(START)}개를 받고 계속 즐겨보세요!<br><small>(베팅 금액을 낮출 수도 있어요)</small></p>
-        <button class="ov-btn">무료 코인 받기</button></div>`;
+      d.innerHTML = `<div class="modal-box" style="text-align:center;max-width:420px"><div class="coin-ico" style="width:64px;height:64px;margin:4px auto 12px"></div>
+        <h3>코인이 부족해요</h3><p>무료 코인 ${U.fmt(START)}개를 받고 계속 즐겨보세요.<br>베팅 금액을 낮춰서 플레이할 수도 있어요.</p>
+        <button class="cta">무료 코인 받기</button></div>`;
       document.getElementById('overlays').appendChild(d);
-      d.querySelector('.ov-btn').addEventListener('click', () => {
+      d.querySelector('.cta').addEventListener('click', () => {
         this.credit(START);
         this.refresh(true);
-        this.fx.coins(60, innerWidth / 2, innerHeight * 0.7);
+        this.fx.coins(70, innerWidth / 2, innerHeight * 0.7, 160);
         A.win(10);
         d.remove();
       });
@@ -116,7 +130,7 @@
       const panel = document.getElementById('sound-panel');
       const mu = document.getElementById('snd-music'), sf = document.getElementById('snd-sfx'), am = document.getElementById('snd-amb');
       mu.checked = A.musicOn; sf.checked = A.sfxOn; am.checked = A.ambOn;
-      const icon = () => document.querySelectorAll('.js-sound').forEach((b) => { b.textContent = A.musicOn || A.sfxOn || A.ambOn ? '🔊' : '🔇'; });
+      const icon = () => document.querySelectorAll('.js-sound').forEach((b) => b.classList.toggle('muted', !(A.musicOn || A.sfxOn || A.ambOn)));
       icon();
       mu.addEventListener('change', () => { A.setMusic(mu.checked); U.store.set('snd.music', mu.checked); icon(); });
       sf.addEventListener('change', () => { A.setSfx(sf.checked); U.store.set('snd.sfx', sf.checked); icon(); });
@@ -134,16 +148,47 @@
     /* ---------- lobby ---------- */
     buildLobby() {
       const fl = document.getElementById('filters');
-      fl.innerHTML = FILTERS.map(([k, l]) => `<button class="chip ${k === this.filter ? 'on' : ''}" data-k="${k}">${l}</button>`).join('');
+      fl.innerHTML = FILTERS.map(([k, l]) => `<button class="chip ${k === this.filter ? 'on' : ''}" data-k="${k}">${l}<span class="n">${root.MACHINES.filter((c) => matches(c, k)).length}</span></button>`).join('');
       fl.addEventListener('click', (e) => {
-        const k = e.target.dataset.k;
-        if (!k) return;
-        this.filter = k;
+        const b = e.target.closest('.chip');
+        if (!b) return;
+        this.filter = b.dataset.k;
         A.click();
-        fl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.k === k));
+        fl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === b));
         this.renderCards();
       });
+      this.renderHero();
       this.renderCards();
+    },
+
+    renderHero() {
+      const hero = document.getElementById('hero');
+      const list = FEATURED.map((id) => root.MACHINES.find((c) => c.id === id));
+      hero.innerHTML = list.map((c, i) => `<div class="hero-slide ${i === 0 ? 'on' : ''}" data-id="${c.id}"
+          style="--hero-accent:${c.theme.accent};--hero-glow:${U.rgba(c.theme.accent, 0.6)};--hero-font:'${c.theme.font}', 'Bungee', sans-serif">
+          <div class="hero-bg" data-poster-bg="${c.id}" style="background-image:linear-gradient(135deg, ${c.theme.bg[1]}, ${c.theme.bg[0]})"></div>
+          <div class="hero-copy">
+            <div class="hero-kicker">FEATURED · ${badge(c) || 'NEW'}</div>
+            <div class="hero-title">${c.en}</div>
+            <div class="hero-kr">${c.name}</div>
+            <p class="hero-desc">${c.desc}</p>
+            <button class="cta" data-play="${c.id}">지금 플레이 ▶</button>
+          </div>
+          <div class="hero-art"><img alt="" data-poster="${c.id}"></div>
+        </div>`).join('') + `<div class="hero-dots">${list.map((c, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}" aria-label="${c.name}"></button>`).join('')}</div>`;
+      let cur = 0;
+      const show = (i) => {
+        cur = (i + list.length) % list.length;
+        hero.querySelectorAll('.hero-slide').forEach((s, k) => s.classList.toggle('on', k === cur));
+        hero.querySelectorAll('.hero-dots button').forEach((s, k) => s.classList.toggle('on', k === cur));
+      };
+      hero.addEventListener('click', (e) => {
+        const p = e.target.closest('[data-play]');
+        if (p) { A.init(); A.click(); location.hash = '#/play/' + p.dataset.play; return; }
+        const dt = e.target.closest('.hero-dots button');
+        if (dt) { show(+dt.dataset.i); clearInterval(this.heroTimer); this.heroTimer = setInterval(() => show(cur + 1), 6000); }
+      });
+      this.heroTimer = setInterval(() => show(cur + 1), 6000);
     },
 
     renderCards() {
@@ -151,24 +196,51 @@
       const list = root.MACHINES.map((c, i) => [c, i]).filter(([c]) => matches(c, this.filter));
       box.innerHTML = list.map(([c, i], n) => {
         const th = c.theme;
-        const top = c.syms[c.syms.length - 1][0];
-        const orb = [c.wild && c.wild.e, (c.scatter || c.coin || c.bonus || {}).e, c.syms[c.syms.length - 2][0], c.syms[Math.floor(c.syms.length / 2)][0]].filter(Boolean);
-        const badge = c.coin ? 'JACKPOT' : c.mech === 'megaways' ? 'MEGAWAYS' : c.bonus ? 'WHEEL' : c.bomb ? 'MULTI x100' : c.reels === 3 ? 'CLASSIC' : '';
-        return `<button class="card" data-id="${c.id}" style="--card-bg: radial-gradient(circle at 50% 35%, ${th.bg[2]}, ${th.bg[1]} 55%, ${th.bg[0]});
-          --card-accent:${th.accent}; --card-glow:${U.rgba(th.accent, 0.45)}; animation-delay:${n * 25}ms">
-          <span class="card-num">#${String(i + 1).padStart(2, '0')}</span>
-          ${badge ? `<span class="card-badge">${badge}</span>` : ''}
-          <div class="card-art"><div class="ring"></div><span class="hero">${top}</span>
-            ${orb.map((e, k) => `<span class="orbit o${k + 1}">${e}</span>`).join('')}</div>
-          <div class="card-info"><h3>${c.name}</h3><div class="en">${c.en}</div>
-            <div class="tags">${tags(c).slice(0, 5).map(([cl, t]) => `<span class="tag ${cl}">${t}</span>`).join('')}</div></div>
+        const b = badge(c);
+        return `<button class="card" data-id="${c.id}" style="--card-bg: linear-gradient(160deg, ${th.bg[1]}, ${th.bg[0]});
+          --card-accent:${th.accent}; --card-glow:${U.rgba(th.accent, 0.4)}; animation-delay:${n * 22}ms">
+          <div class="card-poster">${this.posters[c.id] ? `<img alt="" src="${this.posters[c.id]}">` : `<img alt="" data-poster="${c.id}">`}
+            ${b ? `<span class="badge">${b}</span>` : ''}<span class="card-no">${String(i + 1).padStart(2, '0')}</span></div>
+          <div class="card-info"><h3>${c.name}</h3>
+            <div class="tags">${tags(c).slice(0, 4).map(([cl, t]) => `<span class="tag ${cl}">${t}</span>`).join('')}</div></div>
         </button>`;
       }).join('');
-      box.querySelectorAll('.card').forEach((el) => el.addEventListener('click', () => {
-        A.init();
-        A.click();
-        location.hash = '#/play/' + el.dataset.id;
-      }));
+      box.querySelectorAll('.card').forEach((el) => {
+        el.addEventListener('click', () => { A.init(); A.click(); location.hash = '#/play/' + el.dataset.id; });
+        el.addEventListener('pointermove', (e) => {
+          if (e.pointerType !== 'mouse') return;
+          const r = el.getBoundingClientRect();
+          el.style.setProperty('--ry', ((e.clientX - r.left) / r.width - 0.5) * 10 + 'deg');
+          el.style.setProperty('--rx', -((e.clientY - r.top) / r.height - 0.5) * 10 + 'deg');
+        });
+        el.addEventListener('pointerleave', () => { el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg'); });
+      });
+      this.fillPosters();
+    },
+
+    makePosters() {
+      const ids = FEATURED.concat(root.MACHINES.map((c) => c.id).filter((id) => FEATURED.indexOf(id) < 0));
+      let i = 0;
+      const step = () => {
+        const t0 = performance.now();
+        while (i < ids.length && performance.now() - t0 < 30) {
+          const id = ids[i++];
+          try { this.posters[id] = Art.poster(this.prepared[id], 360, 480); } catch (e) { console.warn(e); }
+        }
+        this.fillPosters();
+        if (i < ids.length) setTimeout(step, 16);
+      };
+      step();
+    },
+    fillPosters() {
+      document.querySelectorAll('img[data-poster]').forEach((img) => {
+        const src = this.posters[img.dataset.poster];
+        if (src) { img.src = src; img.removeAttribute('data-poster'); }
+      });
+      document.querySelectorAll('[data-poster-bg]').forEach((el) => {
+        const src = this.posters[el.dataset.posterBg];
+        if (src) { el.style.backgroundImage = `url(${src})`; el.removeAttribute('data-poster-bg'); }
+      });
     },
 
     /* ---------- routing ---------- */
@@ -184,9 +256,8 @@
         document.title = `${cfg.name} · Slot Palace 30`;
       } else {
         document.getElementById('lobby').classList.remove('hidden');
-        this.bg.setTheme(LOBBY_THEME);
-        document.documentElement.style.setProperty('--accent', LOBBY_THEME.accent);
-        document.documentElement.style.setProperty('--accent2', LOBBY_THEME.accent2);
+        this.setTheme(LOBBY_THEME);
+        ['--accent', '--accent2'].forEach((k, i) => document.documentElement.style.setProperty(k, i ? LOBBY_THEME.accent2 : LOBBY_THEME.accent));
         A.setMachine(LOBBY_MUSIC);
         A.playMusic(LOBBY_MUSIC);
         document.title = 'Slot Palace 30';
