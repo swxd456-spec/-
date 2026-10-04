@@ -58,9 +58,11 @@
       this.amb = new root.SlotAmbient(document.getElementById('amb'));
       this.fx = new root.SlotFx(document.getElementById('fx'));
       this.setTheme(LOBBY_THEME);
-      A.musicOn = U.store.get('snd.music', true);
-      A.sfxOn = U.store.get('snd.sfx', true);
-      A.ambOn = U.store.get('snd.amb', true);
+      // volumes (older saves stored on/off switches)
+      [['music', 0.8], ['sfx', 1], ['amb', 0.8]].forEach(([k, d]) => {
+        const on = U.store.get('snd.' + k, true);
+        A.setVolume(k, on ? U.store.get('vol.' + k, d) : 0);
+      });
       this.prepared = {};
       root.MACHINES.forEach((c) => { this.prepared[c.id] = E.prepare(c, root.SLOT_CALIBRATION); });
       this.buildLobby();
@@ -128,13 +130,24 @@
     /* ---------- sound panel ---------- */
     bindSound() {
       const panel = document.getElementById('sound-panel');
-      const mu = document.getElementById('snd-music'), sf = document.getElementById('snd-sfx'), am = document.getElementById('snd-amb');
-      mu.checked = A.musicOn; sf.checked = A.sfxOn; am.checked = A.ambOn;
-      const icon = () => document.querySelectorAll('.js-sound').forEach((b) => b.classList.toggle('muted', !(A.musicOn || A.sfxOn || A.ambOn)));
+      const icon = () => document.querySelectorAll('.js-sound').forEach((b) => b.classList.toggle('muted', !(A.vol.music || A.vol.sfx || A.vol.amb)));
+      [['music', 'snd-music'], ['sfx', 'snd-sfx'], ['amb', 'snd-amb']].forEach(([k, id]) => {
+        const inp = document.getElementById(id);
+        const out = inp.parentElement.querySelector('output');
+        const v = Math.round(A.vol[k] * 100);
+        inp.value = v; out.textContent = v;
+        inp.style.setProperty('--p', v + '%');
+        inp.addEventListener('input', () => {
+          const n = +inp.value;
+          out.textContent = n;
+          inp.style.setProperty('--p', n + '%');
+          A.setVolume(k, n / 100);
+          U.store.set('vol.' + k, n / 100);
+          icon();
+        });
+        inp.addEventListener('change', () => { if (k === 'sfx') A.click(); });
+      });
       icon();
-      mu.addEventListener('change', () => { A.setMusic(mu.checked); U.store.set('snd.music', mu.checked); icon(); });
-      sf.addEventListener('change', () => { A.setSfx(sf.checked); U.store.set('snd.sfx', sf.checked); icon(); });
-      am.addEventListener('change', () => { A.setAmb(am.checked); U.store.set('snd.amb', am.checked); icon(); });
       document.querySelectorAll('.js-sound').forEach((b) => b.addEventListener('click', (e) => {
         e.stopPropagation();
         panel.classList.toggle('hidden');
@@ -270,6 +283,11 @@
       location.hash = '#/';
     },
   };
+
+  // installable app: offline cache (only works when served from a normal website, e.g. GitHub Pages)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname)) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
 
   root.SlotApp = App;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => App.init());

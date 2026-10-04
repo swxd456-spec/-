@@ -388,8 +388,16 @@ svg { fill: currentColor; stroke: currentColor; }
   display: flex; flex-direction: column; gap: 10px; font-size: 14px;
 }
 .sound-panel h3 { margin: 0; font: 700 11px var(--num); letter-spacing: 3px; color: var(--muted); }
-.sound-panel label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
-.sound-panel input { width: 18px; height: 18px; accent-color: #ff4fd8; }
+.sound-panel { min-width: 250px; }
+.vol-row { display: grid; grid-template-columns: 1fr 2.6em; grid-template-areas: 'l o' 'r r'; gap: 4px 8px; align-items: center; }
+.vol-row label { grid-area: l; font-size: 13.5px; }
+.vol-row output { grid-area: o; text-align: right; font: 700 13px var(--num); color: var(--gold); font-variant-numeric: tabular-nums; }
+.vol-row input[type=range] { grid-area: r; width: 100%; height: 28px; margin: 0; background: none; -webkit-appearance: none; appearance: none; cursor: pointer; touch-action: pan-x; }
+.vol-row input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 8px; background: linear-gradient(90deg, var(--accent), var(--accent2)) 0 0 / var(--p, 80%) 100% no-repeat, rgba(255, 255, 255, 0.14); }
+.vol-row input[type=range]::-moz-range-track { height: 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.14); }
+.vol-row input[type=range]::-moz-range-progress { height: 8px; border-radius: 8px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.vol-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; margin-top: -8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #e8e2ff 45%, #9a8fc4); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(255, 255, 255, 0.15); }
+.vol-row input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #e8e2ff 45%, #9a8fc4); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
 .tap-hint {
   position: fixed; z-index: 80; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   padding: 10px 18px; border-radius: 999px; background: rgba(0, 0, 0, 0.78); border: 1px solid var(--line);

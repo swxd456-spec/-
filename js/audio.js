@@ -127,12 +127,32 @@
     machine: null,
   };
   const MUSIC_VOL = 0.5, SFX_VOL = 0.95, AMB_VOL = 0.45;
+  const MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  A.mobile = MOBILE;
+  A.vol = { music: 0.8, sfx: 1, amb: 0.8 };
+  // voice budget: every scheduled voice is booked as [start, end) with a cost; when the
+  // overlap at its start would exceed the budget, low-priority voices are skipped instead
+  // of overloading the audio thread (which causes crackles and dropouts on phones)
+  const LIMIT = MOBILE ? 64 : 200;
+  let booked = [];
+  function allow(t, dur, cost, prio) {
+    if (!A.ctx) return false;
+    const nowT = A.ctx.currentTime;
+    if (booked.length > 64) booked = booked.filter((b) => b.e > nowT);
+    let load = 0;
+    for (const b of booked) if (b.s <= t && b.e > t) load += b.c;
+    const cap = prio >= 2 ? LIMIT * 1.4 : prio === 1 ? LIMIT : LIMIT * 0.55;
+    if (load + cost > cap) return false;
+    booked.push({ s: t, e: t + dur, c: cost });
+    return true;
+  }
 
   A.init = function () {
     if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
     const AC = root.AudioContext || root.webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC({ latencyHint: 'interactive' });
+    let ctx;
+    try { ctx = new AC({ latencyHint: MOBILE ? 'playback' : 'interactive' }); } catch (e) { ctx = new AC(); }
     A.ctx = ctx;
     // master chain: tone shaping -> glue compressor -> brickwall-ish limiter
     const low = ctx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 110; low.gain.value = 2.5;
@@ -144,7 +164,7 @@
     A.master = ctx.createGain(); A.master.gain.value = 0.9;
     A.master.connect(low); low.connect(high); high.connect(glue); glue.connect(lim); lim.connect(ctx.destination);
 
-    A.musicBus = ctx.createGain(); A.musicBus.gain.value = A.musicOn ? MUSIC_VOL : 0;
+    A.musicBus = ctx.createGain(); A.musicBus.gain.value = A.musicOn ? MUSIC_VOL * A.vol.music * A.vol.music : 0;
     A.musicDuck = ctx.createGain();
     A.musicFilter = ctx.createBiquadFilter(); A.musicFilter.type = 'lowpass'; A.musicFilter.frequency.value = 20000; A.musicFilter.Q.value = 0.8;
     const sat = ctx.createWaveShaper();
@@ -153,7 +173,7 @@
     sat.curve = curve; sat.oversample = '2x';
     A.musicBus.connect(A.musicDuck); A.musicDuck.connect(sat); sat.connect(A.musicFilter); A.musicFilter.connect(A.master);
     // stereo chorus on the music bus (two modulated short delays panned apart)
-    [[-0.8, 0.011, 0.31], [0.8, 0.017, 0.23]].forEach(([pan, base, rate]) => {
+    (MOBILE ? [] : [[-0.8, 0.011, 0.31], [0.8, 0.017, 0.23]]).forEach(([pan, base, rate]) => {
       const d = ctx.createDelay(0.05); d.delayTime.value = base;
       const l = ctx.createOscillator(); l.frequency.value = rate;
       const lg = ctx.createGain(); lg.gain.value = 0.0035; l.connect(lg); lg.connect(d.delayTime); l.start();
@@ -163,8 +183,8 @@
       A.musicFilter.connect(d); d.connect(g); g.connect(p2); p2.connect(A.master);
     });
     A.scBus = ctx.createGain(); A.scBus.connect(A.musicBus); // sidechained layers (bass, chords, arps)
-    A.sfxBus = ctx.createGain(); A.sfxBus.gain.value = A.sfxOn ? SFX_VOL : 0; A.sfxBus.connect(A.master);
-    A.ambBus = ctx.createGain(); A.ambBus.gain.value = A.ambOn ? AMB_VOL : 0; A.ambBus.connect(A.master);
+    A.sfxBus = ctx.createGain(); A.sfxBus.gain.value = A.sfxOn ? SFX_VOL * A.vol.sfx * A.vol.sfx : 0; A.sfxBus.connect(A.master);
+    A.ambBus = ctx.createGain(); A.ambBus.gain.value = A.ambOn ? AMB_VOL * A.vol.amb * A.vol.amb : 0; A.ambBus.connect(A.master);
 
     // reverbs: hall for music, plate for sfx, big room for ambience
     const mkRev = (secs, decay, pre, damp) => {
@@ -193,11 +213,64 @@
 
     A.noise = noiseBuf(ctx, 2);
     A.brown = brownBuf(ctx, 4);
+    prerender(ctx);
     A.ready = true;
     A.startAmbience();
     if (A.pending) A.playMusic(A.pending);
     document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx.state === 'suspended') ctx.resume(); });
   };
+
+  // render frequently used percussive sounds once, then play them as cheap buffers
+  function prerender(ctx) {
+    const OAC = root.OfflineAudioContext || root.webkitOfflineAudioContext;
+    if (!OAC) return;
+    const sr = ctx.sampleRate;
+    const render = (secs, build) => {
+      try {
+        const oc = new OAC(1, Math.ceil(sr * secs), sr);
+        build(oc);
+        const p = oc.startRendering();
+        return p && p.then ? p : null;
+      } catch (e) { return null; }
+    };
+    const coin = (f0) => (oc) => {
+      const out = oc.createGain(); out.gain.value = 0.32; out.connect(oc.destination);
+      COIN_MODES.forEach(([r, a, d]) => {
+        const o = oc.createOscillator(); o.frequency.value = Math.min(18000, f0 * r * (1 + (Math.random() - 0.5) * 0.012));
+        const g = oc.createGain();
+        g.gain.setValueAtTime(0.0001, 0); g.gain.linearRampToValueAtTime(a, 0.0015);
+        g.gain.exponentialRampToValueAtTime(0.0001, d * (0.8 + Math.random() * 0.5));
+        o.connect(g); g.connect(out); o.start(0); o.stop(d + 0.1);
+      });
+    };
+    const metalB = (dur, hp) => (oc) => {
+      const g = oc.createGain();
+      g.gain.setValueAtTime(0.0001, 0); g.gain.linearRampToValueAtTime(1, 0.001); g.gain.exponentialRampToValueAtTime(0.0001, dur);
+      const bp = oc.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 10000; bp.Q.value = 0.8;
+      const h = oc.createBiquadFilter(); h.type = 'highpass'; h.frequency.value = hp;
+      bp.connect(h); h.connect(g); g.connect(oc.destination);
+      [205.3, 304.4, 369.6, 522.7, 540, 800].forEach((f) => { const o = oc.createOscillator(); o.type = 'square'; o.frequency.value = f; o.connect(bp); o.start(0); o.stop(dur); });
+    };
+    const coins = [];
+    for (let i = 0; i < 8; i++) { const p = render(0.32, coin(1900 + i * 230)); if (p) p.then((b) => coins.push(b)).catch(() => {}); }
+    A.coinBufs = coins;
+    A.metalBufs = {};
+    [['s', 0.08, 8000], ['m', 0.35, 7000], ['l', 1.9, 4500]].forEach(([k, d, hp]) => {
+      const p = render(d + 0.05, metalB(d, hp));
+      if (p) p.then((b) => { A.metalBufs[k] = b; }).catch(() => {});
+    });
+  }
+  function playBuf(buf, t, vel, dest, rate, pan, dur, rev) {
+    const ctx = A.ctx;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate || 1;
+    const g = ctx.createGain(); g.gain.value = vel;
+    if (dur) { g.gain.setValueAtTime(vel, t + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
+    src.connect(g);
+    if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; g.connect(p); p.connect(dest); } else g.connect(dest);
+    if (rev) { const sg = ctx.createGain(); sg.gain.value = rev; g.connect(sg); sg.connect(A.revSend); }
+    src.start(t);
+    if (dur) src.stop(t + dur + 0.02);
+  }
 
   function impulse(ctx, secs, decay, damp) {
     const len = Math.floor(ctx.sampleRate * secs);
@@ -239,6 +312,9 @@
   function play(instName, freq, t, dur, vel, dest, opt) {
     const ctx = A.ctx;
     const sp = INST[instName] || INST.sine;
+    const cost = sp.osc.length + (sp.fm ? 1 : 0) + (sp.vib ? 1 : 0) + (sp.breath ? 1 : 0);
+    const prio = opt && opt.prio != null ? opt.prio : dest === A.sfxBus ? 1 : 2;
+    if (!allow(t, dur + sp.env[3] + sp.env[0], cost, prio)) return;
     const out = ctx.createGain();
     const [a, d, s, r] = sp.env;
     const peak = vel * (sp.g || 0.6);
@@ -316,6 +392,7 @@
 
   function noise(t, dur, vel, dest, ftype, f, q, opt) {
     const ctx = A.ctx;
+    if (!allow(t, dur, 1, opt && opt.prio != null ? opt.prio : dest === A.sfxBus ? 1 : 2)) return;
     const n = ctx.createBufferSource(); n.buffer = A.noise;
     const fl = ctx.createBiquadFilter(); fl.type = ftype; fl.frequency.value = f; fl.Q.value = q || 1;
     if (opt && opt.sweep) fl.frequency.exponentialRampToValueAtTime(opt.sweep, t + dur);
@@ -332,6 +409,7 @@
 
   function tone(type, f0, f1, t, dur, vel, dest, opt) {
     const ctx = A.ctx;
+    if (!allow(t, dur, 1, opt && opt.prio != null ? opt.prio : dest === A.sfxBus ? 1 : 2)) return;
     const o = ctx.createOscillator(); o.type = type;
     o.frequency.setValueAtTime(f0, t);
     if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur * (opt && opt.bendT || 1));
@@ -348,6 +426,13 @@
   // 808-style metallic source: six detuned squares
   function metal(t, dur, vel, dest, hp, opt) {
     const ctx = A.ctx;
+    const mb = A.metalBufs && A.metalBufs[dur <= 0.1 ? 's' : dur <= 0.6 ? 'm' : 'l'];
+    if (mb) {
+      if (!allow(t, dur, 1, dest === A.sfxBus ? 1 : 2)) return;
+      playBuf(mb, t, vel, dest, (opt && opt.pitch) || 1, opt && opt.pan, dur, opt && opt.rev);
+      return;
+    }
+    if (!allow(t, dur, 6, dest === A.sfxBus ? 1 : 2)) return;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vel, t + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 10000; bp.Q.value = 0.8;
@@ -530,7 +615,7 @@
     const ctx = A.ctx;
     if (!SEQ.song) return;
     if (SEQ.nextTime < ctx.currentTime - 0.3) SEQ.nextTime = ctx.currentTime + 0.05;
-    while (SEQ.nextTime < ctx.currentTime + 0.15) {
+    while (SEQ.nextTime < ctx.currentTime + (MOBILE ? 0.35 : 0.15)) {
       playStep(SEQ.nextTime);
       let d = SEQ.stepDur;
       const sw = SEQ.song.st.swing || 0;
@@ -716,6 +801,13 @@
   const COIN_MODES = [[1, 1, 0.22], [2.32, 0.55, 0.16], [4.25, 0.32, 0.1], [6.63, 0.18, 0.06], [9.38, 0.1, 0.04]];
   function clink(t, v, dest, pitch) {
     const ctx = A.ctx;
+    if (A.coinBufs && A.coinBufs.length) {
+      if (!allow(t, 0.3, 1, 0)) return;
+      const b = A.coinBufs[Math.floor(Math.random() * A.coinBufs.length)];
+      playBuf(b, t, v, dest, (pitch || 1) * (0.92 + Math.random() * 0.22), (Math.random() - 0.5) * 0.9);
+      return;
+    }
+    if (!allow(t, 0.25, 6, 0)) return;
     const f0 = (1900 + Math.random() * 1700) * (pitch || 1);
     const out = ctx.createGain(); out.gain.value = v * 0.32;
     let node = out;
@@ -922,14 +1014,14 @@
     if (!sx()) return () => {};
     const ctx = A.ctx;
     const start = ctx.currentTime;
-    const n = Math.max(4, Math.floor(ms / (big ? 55 : 70)));
+    const n = Math.max(4, Math.floor(ms / (big ? 55 : 70) / (MOBILE ? 1.6 : 1)));
     const t0 = now();
     for (let i = 0; i < n; i++) {
       const u = i / n;
       const t = t0 + (ms / 1000) * u;
       const f = pNote(Math.floor(u * (big ? 14 : 9)), 1);
-      tone('triangle', f * 2, f * 2, t, 0.05, 0.05, fx());
-      if (i % 2 === 0) clink(t, 0.22, fx(), 0.8 + u * 0.6);
+      tone('triangle', f * 2, f * 2, t, 0.05, 0.05, fx(), { prio: 0 });
+      if (i % (MOBILE ? 4 : 2) === 0) clink(t, 0.22, fx(), 0.8 + u * 0.6);
     }
     return () => { /* scheduled; nothing to stop */ void start; };
   };
@@ -971,7 +1063,7 @@
     });
     DRUM.crash(t + 1.05, 1, fx());
     bellRing(t + 1.05, 1.2 + level * 0.6, 0.05, fx());
-    const coins = 30 + level * 25;
+    const coins = MOBILE ? 14 + level * 6 : 30 + level * 25;
     for (let i = 0; i < coins; i++) clink(t + 0.3 + Math.random() * (2.2 + level), 0.45, fx());
     for (let i = 0; i < 12; i++) play(sfxInst(), pNote(8 + [0, 2, 4, 5, 4, 2, 4, 7, 9, 7, 9, 12][i], 1), t + 1.2 + i * 0.08, 0.12, 0.3, fx(), rv(0.3));
   };
@@ -1092,19 +1184,23 @@
     setTimeout(() => A.impact(0.6), 520);
   };
 
-  A.setMusic = function (on) {
-    A.musicOn = on;
-    if (A.ready) A.musicBus.gain.setTargetAtTime(on ? MUSIC_VOL : 0, A.ctx.currentTime, 0.1);
+  // volume 0..1 per channel; 0 also counts as "off" so muted channels cost nothing
+  A.setVolume = function (kind, v) {
+    v = Math.max(0, Math.min(1, v));
+    A.vol[kind] = v;
+    const on = v > 0;
+    if (kind === 'music') A.musicOn = on;
+    if (kind === 'sfx') { A.sfxOn = on; if (!on) { A.spinLoop(false); A.anticipation(false); } }
+    if (kind === 'amb') A.ambOn = on;
+    if (!A.ready) return;
+    const bus = { music: A.musicBus, sfx: A.sfxBus, amb: A.ambBus }[kind];
+    const base = { music: MUSIC_VOL, sfx: SFX_VOL, amb: AMB_VOL }[kind];
+    // perceptual curve so the slider feels even
+    bus.gain.setTargetAtTime(base * v * v, A.ctx.currentTime, 0.05);
   };
-  A.setSfx = function (on) {
-    A.sfxOn = on;
-    if (A.ready) A.sfxBus.gain.setTargetAtTime(on ? SFX_VOL : 0, A.ctx.currentTime, 0.05);
-    if (!on) { A.spinLoop(false); A.anticipation(false); }
-  };
-  A.setAmb = function (on) {
-    A.ambOn = on;
-    if (A.ready) A.ambBus.gain.setTargetAtTime(on ? AMB_VOL : 0, A.ctx.currentTime, 0.1);
-  };
+  A.setMusic = function (on) { A.setVolume('music', on ? A.vol.music || 0.8 : 0); };
+  A.setSfx = function (on) { A.setVolume('sfx', on ? A.vol.sfx || 1 : 0); };
+  A.setAmb = function (on) { A.setVolume('amb', on ? A.vol.amb || 0.8 : 0); };
 
   A.STYLES = STYLES;
   root.SlotAudio = A;

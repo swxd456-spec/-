@@ -4,6 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#07040f">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Slot Palace">
   <title>Slot Palace 30</title>
   <meta name="description" content="30종의 프리미엄 HTML5 슬롯머신 — 페이라인, 웨이즈, 메가웨이즈, 클러스터, 텀블, 홀드 앤 윈, 보너스 휠. WebGL 배경과 실시간 합성 사운드.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -108,9 +115,9 @@
 
   <div id="sound-panel" class="sound-panel hidden">
     <h3>사운드</h3>
-    <label><input type="checkbox" id="snd-music" checked> 배경 음악</label>
-    <label><input type="checkbox" id="snd-sfx" checked> 효과음</label>
-    <label><input type="checkbox" id="snd-amb" checked> 카지노 분위기음</label>
+    <div class="vol-row"><label for="snd-music">배경 음악</label><input type="range" id="snd-music" min="0" max="100" step="1" value="80"><output for="snd-music">80</output></div>
+    <div class="vol-row"><label for="snd-sfx">효과음</label><input type="range" id="snd-sfx" min="0" max="100" step="1" value="100"><output for="snd-sfx">100</output></div>
+    <div class="vol-row"><label for="snd-amb">카지노 분위기음</label><input type="range" id="snd-amb" min="0" max="100" step="1" value="80"><output for="snd-amb">80</output></div>
   </div>
   <div id="tap-hint" class="tap-hint">화면을 탭하면 사운드가 켜집니다</div>
 
