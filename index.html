@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0618">
+  <title>Slot Palace 30</title>
+  <meta name="description" content="30종의 서로 다른 HTML5 카지노 슬롯머신 — 페이라인, 웨이즈, 메가웨이즈, 클러스터, 텀블, 홀드 앤 윈, 보너스 휠. 모든 사운드는 실시간 합성.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Black+Han+Sans&family=Black+Ops+One&family=Bungee&family=Cinzel:wght@700&family=Cinzel+Decorative:wght@700&family=Creepster&family=Fredoka:wght@500;700&family=Great+Vibes&family=Jua&family=Kaushan+Script&family=Monoton&family=Mountains+of+Christmas:wght@700&family=Noto+Sans+KR:wght@400;700;900&family=Orbitron:wght@700;900&family=Pirata+One&family=Playfair+Display:wght@700;900&family=Press+Start+2P&family=Righteous&family=Rye&family=Uncial+Antiqua&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="bg"></canvas>
+
+  <!-- Lobby -->
+  <main id="lobby" class="lobby">
+    <header class="lobby-top">
+      <div class="brand">
+        <span class="brand-icon">🎰</span>
+        <div>
+          <h1>SLOT PALACE <b>30</b></h1>
+          <p>30종의 프리미엄 슬롯머신</p>
+        </div>
+      </div>
+      <div class="lobby-right">
+        <div class="wallet"><span class="coin">🪙</span><span class="js-balance">0</span></div>
+        <button class="icon-btn js-sound" title="사운드 설정">🔊</button>
+      </div>
+    </header>
+    <nav class="filters" id="filters"></nav>
+    <section class="cards" id="cards"></section>
+    <footer class="lobby-foot">
+      가상 코인 전용 데모 게임입니다. 실제 돈은 사용되지 않습니다. 모든 음악·효과음은 Web Audio로 실시간 합성됩니다.
+    </footer>
+  </main>
+
+  <!-- Game -->
+  <section id="game" class="game hidden">
+    <header class="g-top">
+      <button class="icon-btn js-back" title="로비로">◀</button>
+      <div class="g-title">
+        <h2 class="js-name"></h2>
+        <span class="js-en"></span>
+      </div>
+      <div class="g-right">
+        <div class="wallet"><span class="coin">🪙</span><span class="js-balance">0</span></div>
+        <button class="icon-btn js-pay" title="배당표">ℹ</button>
+        <button class="icon-btn js-sound" title="사운드 설정">🔊</button>
+      </div>
+    </header>
+    <div class="g-stage">
+      <div class="g-info js-info"></div>
+      <div class="frame js-frame">
+        <div class="frame-lights"></div>
+        <canvas class="reels js-reels"></canvas>
+      </div>
+      <div class="g-msg js-msg"></div>
+    </div>
+    <footer class="g-controls">
+      <div class="ctl-group bet">
+        <button class="ctl-btn js-bet-down" title="베팅 감소">−</button>
+        <div class="bet-box"><small>BET</small><span class="js-bet">100</span></div>
+        <button class="ctl-btn js-bet-up" title="베팅 증가">+</button>
+      </div>
+      <div class="ctl-group win-box"><small>WIN</small><span class="js-win">0</span></div>
+      <div class="ctl-group actions">
+        <button class="ctl-btn small js-turbo" title="터보">⚡<small>TURBO</small></button>
+        <button class="spin-btn js-spin" title="스핀 (Space)"><span class="spin-ico">⟳</span><small class="js-spin-label">SPIN</small></button>
+        <button class="ctl-btn small js-auto" title="자동 스핀">▶<small class="js-auto-label">AUTO</small></button>
+      </div>
+    </footer>
+    <div class="auto-menu hidden js-auto-menu">
+      <button data-n="10">10</button><button data-n="25">25</button><button data-n="50">50</button><button data-n="100">100</button><button data-n="9999">∞</button>
+    </div>
+  </section>
+
+  <div id="overlays"></div>
+  <canvas id="fx"></canvas>
+
+  <div id="sound-panel" class="sound-panel hidden">
+    <h3>사운드</h3>
+    <label><input type="checkbox" id="snd-music" checked> 배경 음악</label>
+    <label><input type="checkbox" id="snd-sfx" checked> 효과음</label>
+    <label><input type="checkbox" id="snd-amb" checked> 카지노 분위기음</label>
+  </div>
+  <div id="tap-hint" class="tap-hint">화면을 탭하면 사운드가 켜집니다 🔊</div>
+
+  <script src="js/util.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/machines.js"></script>
+  <script src="js/calibration.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
