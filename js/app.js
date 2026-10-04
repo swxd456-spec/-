@@ -196,7 +196,6 @@
 
     goLobby() {
       A.click();
-      if (this.game && (this.game.fs || this.game.hw) && !confirm('보너스 게임이 진행 중입니다. 로비로 나가시겠습니까?')) return;
       location.hash = '#/';
     },
   };
