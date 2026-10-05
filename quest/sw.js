@@ -1,10 +1,12 @@
 /* Offline support for 행운의 궁전. Own files are network-first so config.txt and code updates arrive right away;
    the cache is only used when the device is offline. Fonts are cache-first. */
-const VERSION = 'quest-v1';
+const VERSION = 'quest-v2';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'config.txt', 'css/slot.css', 'css/quest.css',
   'js/util.js', 'js/config.js', 'js/engine.js', 'js/machines.js', 'js/calibration.js', 'js/audio.js', 'js/art.js',
   'js/bg.js', 'js/fx.js', 'js/render.js', 'js/game.js', 'js/shisen.js', 'js/spotdiff.js', 'js/story.js', 'js/shop.js', 'js/main.js',
+  'js/chara.js', 'js/cinema.js', 'js/map.js', 'js/league.js', 'js/challenge.js',
+  'js/games/common.js', 'js/games/legacy.js', 'js/games/match3.js', 'js/games/bubble.js', 'js/games/brick.js', 'js/games/block.js', 'js/games/sling.js', 'js/games/stack.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ];
 self.addEventListener('install', (e) => {

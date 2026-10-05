@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="행운의 궁전">
   <title>행운의 궁전</title>
-  <meta name="description" content="사천성 · 틀린그림찾기 · 슬롯머신이 하나의 모험으로 이어지는 퍼즐 어드벤처">
+  <meta name="description" content="팡팡·사천성·틀린그림·버블·벽돌깨기·블록·새총·탑쌓기·슬롯이 하나의 이야기로 이어지는 퍼즐 어드벤처">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Black+Han+Sans&family=Black+Ops+One&family=Bungee&family=Cinzel:wght@700;900&family=Cinzel+Decorative:wght@700;900&family=Creepster&family=Fredoka:wght@500;700&family=Kaushan+Script&family=Monoton&family=Mountains+of+Christmas:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Orbitron:wght@700;900&family=Oxanium:wght@600;700;800&family=Pirata+One&family=Playfair+Display:wght@700;900&family=Press+Start+2P&family=Righteous&family=Rye&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -26,12 +26,25 @@
   <!-- title -->
   <section id="title" class="title-screen">
     <div class="ts-glow"></div>
-    <div class="ts-fox">🦊</div>
+    <div class="ts-fox js-tsfox"></div>
     <h1 class="ts-logo">행운의 궁전</h1>
     <p class="ts-sub">PALACE OF FORTUNE</p>
-    <p class="ts-tag">사천성 · 틀린그림찾기 · 슬롯머신 — 하나로 이어지는 모험</p>
+    <p class="ts-tag">9가지 게임 · 12개의 세계 · 끝없는 모험</p>
     <button class="cta ts-start" id="ts-start">터치해서 시작</button>
     <p class="ts-foot">가상 코인 게임입니다</p>
+  </section>
+
+  <!-- stage map -->
+  <section id="map" class="map-screen hidden">
+    <header class="q-top">
+      <button class="icon-btn js-menu" aria-label="메뉴"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+      <div class="q-level js-level"><b class="js-lv">1</b><i><em class="js-xp"></em></i></div>
+      <button class="wallet q-wallet js-shop"><span class="coin-ico"></span><span class="js-balance">0</span><span class="plus">+</span></button>
+      <button class="q-league js-leaguebtn js-league" aria-label="주간 리그"></button>
+      <button class="icon-btn js-quests" aria-label="퀘스트"><svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z" fill="none" stroke-width="2"/><path d="M9 10h6M9 14h6M9 18h4" fill="none" stroke-width="2" stroke-linecap="round"/></svg><span class="dot js-qdot hidden"></span></button>
+      <button class="icon-btn js-sound" aria-label="사운드 설정"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </header>
+    <div class="map-host js-map"></div>
   </section>
 
   <!-- puzzle screen -->
@@ -40,6 +53,7 @@
       <button class="icon-btn js-menu" aria-label="메뉴"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke-width="2.4" stroke-linecap="round"/></svg></button>
       <div class="q-level js-level"><b class="js-lv">1</b><i><em class="js-xp"></em></i></div>
       <button class="wallet q-wallet js-shop"><span class="coin-ico"></span><span class="js-balance">0</span><span class="plus">+</span></button>
+      <button class="q-league js-leaguebtn js-league" aria-label="주간 리그"></button>
       <button class="icon-btn js-quests" aria-label="퀘스트"><svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z" fill="none" stroke-width="2"/><path d="M9 10h6M9 14h6M9 18h4" fill="none" stroke-width="2" stroke-linecap="round"/></svg><span class="dot js-qdot hidden"></span></button>
       <button class="icon-btn js-sound" aria-label="사운드 설정"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke-width="2" stroke-linecap="round"/></svg></button>
     </header>
@@ -139,8 +153,22 @@
   <script src="js/game.js"></script>
   <script src="js/shisen.js"></script>
   <script src="js/spotdiff.js"></script>
+  <script src="js/games/common.js"></script>
+  <script src="js/games/legacy.js"></script>
+  <script src="js/games/match3.js"></script>
+  <script src="js/games/bubble.js"></script>
+  <script src="js/games/brick.js"></script>
+  <script src="js/games/block.js"></script>
+  <script src="js/games/sling.js"></script>
+  <script src="js/games/stack.js"></script>
+  <script src="js/chara.js"></script>
+  <script src="js/cinema.js"></script>
   <script src="js/story.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/league.js"></script>
+  <script src="js/challenge.js"></script>
   <script src="js/shop.js"></script>
   <script src="js/main.js"></script>
+  <script>document.querySelector('.js-tsfox').innerHTML = Chara.svg('lumi', 'joy');</script>
 </body>
 </html>

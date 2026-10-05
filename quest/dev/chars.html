@@ -1,0 +1,4 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../css/slot.css"><link rel="stylesheet" href="../css/quest.css">
+<body style="background:#1a1030;overflow:auto"><div id="g" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px"></div>
+<script src="../js/util.js"></script><script src="../js/chara.js"></script>
+<script>const g=document.getElementById('g');Object.keys(Chara.CH).forEach(id=>['smile','joy','surprised','angry','sad','wink'].forEach((e,i)=>{if(i>2&&!['lumi','nocturne','toto'].includes(id))return;const d=Chara.el(id,e);d.style.width='110px';const w=document.createElement('div');w.style.cssText='text-align:center;color:#fff;font-size:11px';w.append(d,id+' '+e);g.append(w);}));</script>

@@ -1302,6 +1302,18 @@
     for (let i = 0; i < 6; i++) clink(t + 0.3 + i * 0.05, 0.4, fx());
   };
 
+  /* building blocks for the mini-game modules (each game defines its own sounds with these) */
+  A.kit = {
+    ok: () => sx(),                   // false while audio is locked / muted → skip
+    now: () => now(),                 // schedule time (seconds)
+    sfx: () => A.sfxBus,              // destination for sound effects
+    rv: (v) => rv(v),                 // reverb option: rv(0.4)
+    note: (i, oct) => pNote(i, oct),  // frequency of scale degree i in the current hall's key
+    inst: Object.keys(INST),          // instrument names for play()
+    play: (inst, freq, t, dur, vel, opt) => play(inst, freq, t, dur, vel, A.sfxBus, opt),
+    tone: (type, f0, f1, t, dur, vel, opt) => tone(type, f0, f1, t, dur, vel, A.sfxBus, opt),
+    noise: (t, dur, vel, ftype, f, q, opt) => noise(t, dur, vel, A.sfxBus, ftype, f, q, opt),
+  };
   A.STYLES = STYLES;
   root.SlotAudio = A;
 })(window);

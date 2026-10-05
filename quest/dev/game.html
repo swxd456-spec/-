@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Mini-game harness</title>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Bungee&family=Noto+Sans+KR:wght@400;500;700;900&family=Oxanium:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/slot.css">
+  <link rel="stylesheet" href="../css/quest.css">
+</head>
+<body>
+  <!-- Dev harness: ../dev/game.html?g=match3&stage=1&hall=0
+       Mounts window.QuestGames[g] exactly like the real game does, with a fake wallet. -->
+  <canvas id="bgl"></canvas><canvas id="amb"></canvas>
+  <section id="play" class="play">
+    <div class="mg-host js-mg"></div>
+  </section>
+  <div id="overlays"></div>
+  <canvas id="fx"></canvas>
+  <script src="../js/util.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/engine.js"></script>
+  <script src="../js/machines.js"></script>
+  <script src="../js/calibration.js"></script>
+  <script src="../js/audio.js"></script>
+  <script src="../js/art.js"></script>
+  <script src="../js/bg.js"></script>
+  <script src="../js/fx.js"></script>
+  <script src="../js/games/common.js"></script>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const g = q.get('g') || 'match3', stage = +(q.get('stage') || 1), hall = +(q.get('hall') || 0);
+    const s = document.createElement('script');
+    s.src = '../js/games/' + g + '.js?' + Date.now();
+    s.onload = boot;
+    document.body.appendChild(s);
+    function boot() {
+      const M = window.MACHINES, cfg = M[hall % M.length];
+      const m = SlotEngine.prepare(cfg, window.SLOT_CALIBRATION);
+      const shader = new ShaderBG(document.getElementById('bgl')), amb = new SlotAmbient(document.getElementById('amb')), fx = new SlotFx(document.getElementById('fx'));
+      shader.setTheme(cfg.theme); amb.setTheme(cfg.theme);
+      document.documentElement.style.setProperty('--accent', cfg.theme.accent); document.documentElement.style.setProperty('--accent2', cfg.theme.accent2);
+      SlotAudio.setMachine && SlotAudio.setMachine(m);
+      ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => SlotAudio.init(), { passive: true }));
+      window.coins = 100000; window.events = []; window.result = null;
+      const Game = window.QuestGames[g];
+      const host = document.querySelector('.js-mg');
+      host.className = 'mg-host js-mg ' + g;
+      const params = Game.params(stage, QuestConfig);
+      window.params = params;
+      window.G = new Game(host, {
+        params, stage, seed: U.hashStr('dev-' + g + '-' + stage), m, fx, theme: cfg.theme, machineId: cfg.id,
+        spend: (c) => { if (window.coins < c) return false; window.coins -= c; return true; },
+        onEvent: (type, d) => window.events.push([type, d]),
+        onEnd: (r) => { window.result = r; console.log('END', JSON.stringify(r)); },
+      });
+      let last = performance.now();
+      const frame = (t) => { const dt = Math.min(0.05, (t - last) / 1000); last = t; shader.draw(t, dt); amb.draw(t, dt); fx.draw(t, dt); requestAnimationFrame(frame); };
+      requestAnimationFrame(frame);
+      requestAnimationFrame(() => { G.layout(); G.start(); });
+    }
+  </script>
+</body>
+</html>
