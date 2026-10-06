@@ -60,7 +60,7 @@
         </div></div>
         <div class="map-head">
           <button class="map-ep js-eps"><small>EPISODE ${o.ei + 1}${o.season > 1 ? ` · 시즌 ${o.season}` : ''}</small><b>${o.ep.title}</b></button>
-          <div class="map-starsum">★ ${totalStars}<small>/${n * 3}</small></div>
+          <div class="map-right"><button class="map-free js-free">🎮 자유 플레이</button><div class="map-starsum">★ ${totalStars}<small>/${n * 3}</small></div></div>
         </div>
         <div class="map-panel js-mpanel"></div>`;
       const scroll = host.querySelector('.js-mscroll');
@@ -115,6 +115,8 @@
         const go = panel.querySelector('.js-go');
         if (go && go.classList.contains('auto')) { clearInterval(this.timer); go.classList.remove('auto'); }
       }, { passive: true }));
+      const fb = host.querySelector('.js-free');
+      if (o.onFree) fb.addEventListener('click', (e) => { e.stopPropagation(); clearInterval(this.timer); A.click && A.click(); o.onFree(); }); else fb.remove();
       host.querySelector('.js-eps').addEventListener('click', () => { clearInterval(this.timer); A.click && A.click(); o.onEpisodes(); });
       showPanel(Math.min(sel, n - 1), true);
     },

@@ -1,6 +1,6 @@
 /* Offline support for 행운의 궁전. Own files are network-first so config.txt and code updates arrive right away;
    the cache is only used when the device is offline. Fonts are cache-first. */
-const VERSION = 'quest-v2';
+const VERSION = 'quest-v3';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'config.txt', 'css/slot.css', 'css/quest.css',
   'js/util.js', 'js/config.js', 'js/engine.js', 'js/machines.js', 'js/calibration.js', 'js/audio.js', 'js/art.js',

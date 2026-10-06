@@ -517,3 +517,41 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .q-top { gap: 6px; }
 @media (max-width: 420px) { .q-top .icon-btn { width: 38px; height: 38px; } .q-top .wallet { padding-left: 6px; padding-right: 6px; font-size: 14px; } }
 .ic-sub { max-width: min(560px, 90vw); margin-left: auto; margin-right: auto; font: 700 clamp(13px, 3.4vw, 16px)/1.45 var(--ui); letter-spacing: 0; color: #ffe9a8; }
+
+/* ---------- free play (arcade) ---------- */
+.map-right { display: flex; align-items: center; gap: 6px; }
+.map-free { padding: 8px 12px; border-radius: 999px; background: linear-gradient(180deg, #7b61ff, #4a2cc9); border: 1px solid rgba(255, 255, 255, 0.35); font-weight: 800; font-size: 13px; box-shadow: 0 3px 0 #2a1680, 0 0 16px rgba(123, 97, 255, 0.5); white-space: nowrap; }
+.map-free:active { transform: translateY(2px); box-shadow: 0 1px 0 #2a1680; }
+@media (max-width: 400px) { .map-free { padding: 7px 9px; font-size: 12px; } .map-ep b { font-size: 15px; } }
+.ch-back { margin-left: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); font-weight: 700; font-size: 11.5px; }
+.ar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+.ar-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px 12px; border-radius: 18px; text-align: center; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 28%, transparent), rgba(255, 255, 255, 0.03)); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); transition: transform 0.15s; animation: fadeUp 0.35s both; }
+.ar-card:active { transform: scale(0.96); }
+.ar-card b { font: 400 16px var(--kr); }
+.ar-card small { color: var(--muted); font-size: 11.5px; }
+.ar-ico { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 18px; font-size: 32px; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); box-shadow: 0 5px 0 color-mix(in srgb, var(--c) 45%, #000), 0 0 18px color-mix(in srgb, var(--c) 60%, transparent); }
+.ar-ico.big { width: 70px; height: 70px; font-size: 40px; flex: none; }
+.ar-detail { margin-top: 12px; display: flex; flex-direction: column; align-items: stretch; gap: 12px; animation: fadeUp 0.3s both; }
+.ar-detail .ar-back { align-self: flex-start; margin: 0; padding: 7px 14px; font-size: 13px; }
+.ar-head { display: flex; align-items: center; gap: 14px; }
+.ar-head b { display: block; font: 400 22px var(--kr); }
+.ar-head small { color: var(--muted); font-size: 13px; }
+.ar-stage { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.ar-step { min-width: 46px; height: 46px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); font: 800 16px var(--num); }
+.ar-step:active { background: rgba(255, 255, 255, 0.18); }
+.ar-num { min-width: 120px; text-align: center; }
+.ar-num b { display: block; font: 800 30px var(--num); color: #ffe27a; text-shadow: 0 0 14px rgba(255, 200, 60, 0.6); }
+.ar-num small { font-weight: 800; color: var(--accent2); letter-spacing: 2px; }
+.ar-range { width: 100%; accent-color: #ffd23f; }
+.ar-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.ar-presets button { padding: 8px 2px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); font-weight: 800; font-size: 13px; }
+.ar-presets small { display: block; color: var(--muted); font: 700 10.5px var(--num); }
+.ar-info { text-align: center; color: #ddd8f0; font-size: 13px; }
+.ar-info b { color: #6dff9e; }
+.ar-detail .cta { align-self: center; margin-top: 2px; }
+.ar-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; }
+.ar-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); }
+.ar-slot img { width: 48px; height: 48px; }
+.ar-slot b { font-size: 11.5px; font-weight: 700; }
+.ar-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.ar-row .ghost-btn { margin-top: 10px; }

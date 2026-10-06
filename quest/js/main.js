@@ -117,7 +117,8 @@
     },
     lowBalance() { this.openShop('코인이 부족해요'); },
     setTheme(th) { this.shader.setTheme(th); this.amb.setTheme(th); ['--accent', '--accent2'].forEach((k, i) => document.documentElement.style.setProperty(k, i ? th.accent2 : th.accent)); },
-    goLobby() { this.openMenu(); },
+    // slot back button: free-play slot returns to the game list, otherwise the menu
+    goLobby() { if (this.stage && this.stage.free) { this.clearStage(); this.openArcade(); } else this.openMenu(); },
 
     /* ---------- progression ---------- */
     xpNeed(lv) { return 100 + lv * 60; },
@@ -227,6 +228,7 @@
         auto: auto ? Math.max(0, C.num('캠페인', '자동시작_초')) : 0,
         onStart: (i) => { if (token === this.flow) this.startStage(i); },
         onEpisodes: () => this.openEpisodes(),
+        onFree: () => { ++this.flow; this.clearStage(); this.openArcade(); },
       });
     },
 
@@ -265,7 +267,7 @@
       this.refresh();
       const gs = chal ? chal.gs : S.gameStage(st.season, this.stage.ei, this.stage.si);
       const p = Game.params(gs, C);
-      if (chal) p.fee = 0;
+      if (chal && !chal.free) p.fee = 0;
       this.updateChapter(def, inf, chal);
       if (!st.seen[def.g]) {
         await this.howto(Game);
@@ -300,6 +302,7 @@
     async gameEnd(def, res, p, token, meta) {
       if (!res.cleared) return this.stageFail(def, p, token, meta);
       if (meta && meta.n) return this.challengeEnd(def, res, meta);
+      if (meta && meta.free) return this.freeEnd(def, res, p, meta);
       const rows = [['클리어 보상', p.reward]].concat((res.rows || []).filter((r) => r && r[1]));
       if (def.g === 'diff' && this.usingCustom) this.state.customIdx++;
       this.emit(def.g + '_clear', 1);
@@ -362,13 +365,13 @@
     stageFail(def, p, token, meta) {
       A.qFail();
       if (this.mg) this.mg.paused = true;
-      const free = meta && meta.n;
+      const free = meta && meta.n, arcade = meta && meta.free;
       const d = this.ov(`<div class="ov-glow" style="--glow:rgba(255,60,90,.45)"></div>
         <div class="title3d small fail" data-t="${p.time ? 'TIME OVER' : 'FAILED'}">${p.time ? 'TIME OVER' : 'FAILED'}</div>
         <div class="lumi-mini">${fox('sad')}<p>${S.pick(S.LINES.fail)} 코인으로 이어서 할 수 있어요.</p></div>
         <button class="cta big js-ext">${p.extendText || '+' + p.extendSec + '초'} 계속하기 <span class="price">🪙 ${U.fmt(p.extendCost)}</span></button>
         <button class="ghost-btn js-retry">처음부터 다시 <span class="price">🪙 ${U.fmt(free ? 0 : p.fee)}</span></button>
-        <button class="ghost-btn js-quit">지도로 돌아가기</button>`, 'fail-ov');
+        <button class="ghost-btn js-quit">${arcade ? '게임 목록으로' : '지도로 돌아가기'}</button>`, 'fail-ov');
       d.querySelector('.js-ext').addEventListener('click', () => {
         if (!this.spend(p.extendCost, '이어하기에')) return;
         A.click(); this.close(d);
@@ -380,9 +383,9 @@
         A.click(); this.close(d);
         const tk = ++this.flow;
         if (this.mg) { this.mg.destroy(); this.mg = null; }
-        this.startGame(def, tk, free ? meta : null);
+        this.startGame(def, tk, free || arcade ? meta : null);
       });
-      d.querySelector('.js-quit').addEventListener('click', () => { A.click(); this.close(d); this.showMap(false); });
+      d.querySelector('.js-quit').addEventListener('click', () => { A.click(); this.close(d); if (arcade) { this.clearStage(); this.openArcade(meta.g); } else this.showMap(false); });
     },
 
     /* ---------- slot festival stage ---------- */
@@ -501,6 +504,7 @@
     updateChapter(def, inf, chal) {
       const el = $('.js-chapter');
       const st = this.state;
+      if (chal && chal.free) { el.innerHTML = `<span class="ch-season">자유 플레이</span><span class="ch-hall">${inf.icon} ${inf.name} · ${chal.gs}단계</span><button class="ch-back js-arcade-back">◀ 목록</button>`; el.querySelector('.js-arcade-back').addEventListener('click', () => { A.click(); ++this.flow; this.clearStage(); this.openArcade(def.g); }); return; }
       el.innerHTML = chal ? `<span class="ch-season">도전장</span><span class="ch-hall">${esc(chal.n)}님 ${U.fmt(chal.sc)}점을 넘어라</span>`
         : `<span class="ch-season">${this.stage.ei + 1}-${this.stage.si + 1}</span><span class="ch-hall">${inf.icon} ${inf.name}${def.boss ? ' · <b class="ch-boss">BOSS</b>' : ''}</span><span class="ch-ep">${this.ep().title}${st.season > 1 ? ' · S' + st.season : ''}</span>`;
     },
@@ -524,7 +528,7 @@
         A.qWhoosh();
         const st = this.state;
         const lines = S.LINES[def.boss ? 'boss' : def.g] || S.LINES.clear;
-        const kicker = chal ? '친구의 도전장' : `EPISODE ${this.stage.ei + 1} · STAGE ${this.stage.si + 1}${st.season > 1 ? ' · SEASON ' + st.season : ''}`;
+        const kicker = chal ? (chal.free ? `자유 플레이 · ${chal.gs}단계 · ${this.levelName(chal.gs)}` : '친구의 도전장') : `EPISODE ${this.stage.ei + 1} · STAGE ${this.stage.si + 1}${st.season > 1 ? ' · SEASON ' + st.season : ''}`;
         const sub = def.g === 'slot' ? `${cfg.name} · 축제 스핀 ${this.slotNeed}회` : (inf.desc || '');
         const d = this.ov(`<div class="ic-band ${def.boss ? 'boss' : ''}"><div class="ic-kicker">${kicker}</div>
           <div class="ic-title"><span class="ic-ico">${inf.icon}</span>${def.boss ? 'BOSS · ' : ''}${inf.name}</div><div class="ic-sub">${sub}</div>
@@ -728,12 +732,117 @@
         onEpisodes: () => this.openEpisodes(),
       });
     },
+    /* ---------- free play: any game, any stage ---------- */
+    levelName(n) { return n <= 3 ? '연습' : n <= 15 ? '쉬움' : n <= 40 ? '보통' : n <= 80 ? '어려움' : '지옥'; },
+    openArcade(selG) {
+      const st = this.state;
+      st.freeBest = st.freeBest || {};
+      const games = ['match3', 'bubble', 'brick', 'block', 'sling', 'stack', 'shisen', 'diff'].filter((g) => G[g]);
+      const MAX = Math.max(10, C.num('자유플레이', '최대단계'));
+      const { d, close } = this.panel(`<div class="modal-head"><div><h3>자유 플레이</h3><div class="en">FREE PLAY · 원하는 게임 · 원하는 단계</div></div><button class="icon-btn js-close" aria-label="닫기">✕</button></div>
+        <div class="ar-grid">${games.map((g) => { const inf = G[g].info; const b = st.freeBest[g] || 0; return `<button class="ar-card" data-g="${g}" style="--c:${inf.color}"><span class="ar-ico">${inf.icon}</span><b>${inf.name}</b><small>${b ? `최고 ${b}단계 클리어` : '도전 기록 없음'}</small></button>`; }).join('')}
+          <button class="ar-card slot" data-g="slot" style="--c:#ffd23f"><span class="ar-ico">🎰</span><b>슬롯머신 30종</b><small>원하는 머신 골라 돌리기</small></button></div>
+        <div class="ar-detail js-ard hidden"></div>
+        <p class="menu-info">자유 플레이는 이야기 진행·별과 상관없어요. 입장료는 같고, 보상은 ${C.num('자유플레이', '보상_배율')}%만 받아요. 단계가 높을수록 어려워요(1~3 연습 · ~15 쉬움 · ~40 보통 · ~80 어려움 · 그 이상 지옥).</p>`);
+      d.classList.add('arcade');
+      const det = d.querySelector('.js-ard'), grid = d.querySelector('.ar-grid');
+      const showGame = (g) => {
+        grid.classList.add('hidden'); det.classList.remove('hidden');
+        if (g === 'slot') {
+          det.innerHTML = `<button class="ghost-btn ar-back">◀ 게임 목록</button><div class="ar-slots">${M.map((m, i) => `<button class="ar-slot" data-i="${i}" style="--c:${m.theme.accent}"><img alt="" src="${root.SlotArt.icon(this.machine(m.id), this.machine(m.id).normalCount - 1, 48)}"><b>${m.name}</b></button>`).join('')}</div>`;
+          det.querySelector('.ar-back').addEventListener('click', () => { A.click(); det.classList.add('hidden'); grid.classList.remove('hidden'); });
+          det.querySelectorAll('.ar-slot').forEach((b) => b.addEventListener('click', () => { A.click(); close(); this.startFreeSlot(M[+b.dataset.i]); }));
+          return;
+        }
+        const Game = G[g], inf = Game.info;
+        let n = Math.min(MAX, Math.max(1, (st.freeLast && st.freeLast[g]) || (st.freeBest[g] || 0) + 1));
+        det.innerHTML = `<button class="ghost-btn ar-back">◀ 게임 목록</button>
+          <div class="ar-head" style="--c:${inf.color}"><span class="ar-ico big">${inf.icon}</span><div><b>${inf.name}</b><small>${inf.desc || ''}</small></div></div>
+          <div class="ar-stage"><button class="ar-step js-m10">−10</button><button class="ar-step js-m1">−</button><div class="ar-num"><b class="js-n"></b><small class="js-lv"></small></div><button class="ar-step js-p1">+</button><button class="ar-step js-p10">+10</button></div>
+          <input type="range" class="ar-range js-r" min="1" max="${MAX}" step="1">
+          <div class="ar-presets">${[[1, '연습'], [10, '쉬움'], [25, '보통'], [50, '어려움'], [100, '지옥']].filter((x) => x[0] <= MAX).map(([v, l]) => `<button data-v="${v}">${l}<small>${v}</small></button>`).join('')}</div>
+          <div class="ar-info js-info"></div>
+          <button class="cta big js-play">▶ 플레이</button>`;
+        const set = (v) => {
+          n = U.clamp(Math.round(v), 1, MAX);
+          det.querySelector('.js-n').textContent = n + '단계';
+          det.querySelector('.js-lv').textContent = this.levelName(n);
+          det.querySelector('.js-r').value = n;
+          det.querySelector('.js-r').style.setProperty('--p', ((n - 1) / (MAX - 1)) * 100 + '%');
+          const p = Game.params(n, C);
+          det.querySelector('.js-info').innerHTML = `입장료 🪙${U.fmt(p.fee)} · 클리어 보상 🪙${U.fmt(Math.round(p.reward * C.num('자유플레이', '보상_배율') / 100))}${p.time ? ` · 제한시간 ${Math.round(p.time)}초` : ''}${(st.freeBest[g] || 0) >= n ? ' · <b>클리어함 ✓</b>' : ''}`;
+        };
+        set(n);
+        det.querySelector('.ar-back').addEventListener('click', () => { A.click(); det.classList.add('hidden'); grid.classList.remove('hidden'); });
+        [['.js-m10', -10], ['.js-m1', -1], ['.js-p1', 1], ['.js-p10', 10]].forEach(([c, dv]) => det.querySelector(c).addEventListener('click', () => { A.click(); set(n + dv); }));
+        det.querySelector('.js-r').addEventListener('input', (e) => set(+e.target.value));
+        det.querySelectorAll('.ar-presets button').forEach((b) => b.addEventListener('click', () => { A.click(); set(+b.dataset.v); }));
+        det.querySelector('.js-play').addEventListener('click', () => { A.click(); close(); this.startFree(g, n); });
+      };
+      d.querySelectorAll('.ar-card').forEach((b) => b.addEventListener('click', () => { A.click(); showGame(b.dataset.g); }));
+      if (selG) showGame(selG);
+    },
+    startFree(g, n) {
+      const st = this.state;
+      (st.freeLast = st.freeLast || {})[g] = n; this.save();
+      const token = ++this.flow;
+      this.clearStage();
+      if (this.restore) { st.ep = this.restore.ep; st.si = this.restore.si; this.restore = null; }
+      const ep = this.ep();
+      const def = { g, machine: ep.machines[n % ep.machines.length] };
+      this.stage = { ei: st.ep, si: st.si, def, replay: true, free: true, token };
+      this.stageMachine = def.machine;
+      // the same stage number is always the same level (so players can retry it)
+      this.startGame(def, token, { free: true, g, gs: n, seed: U.hashStr(`free-${g}-${n}`) });
+    },
+    freeEnd(def, res, p, meta) {
+      const st = this.state, g = def.g, n = meta.gs;
+      const k = C.num('자유플레이', '보상_배율') / 100;
+      const rows = [['클리어 보상', p.reward]].concat((res.rows || []).filter((r) => r && r[1])).map((r) => [r[0], Math.round(r[1] * k)]).filter((r) => r[1] > 0);
+      const total = rows.reduce((a, r) => a + r[1], 0);
+      this.credit(total);
+      st.freeBest = st.freeBest || {};
+      const record = n > (st.freeBest[g] || 0);
+      if (record) st.freeBest[g] = n;
+      (st.freeLast = st.freeLast || {})[g] = Math.min(n + 1, Math.max(10, C.num('자유플레이', '최대단계')));
+      this.save();
+      this.emit(g + '_clear', 1);
+      this.addXp(10 + (res.stars || 1) * 5);
+      A.qClear(); this.fx.confetti(70);
+      const d = this.ov(`<div class="ov-rays"></div><div class="ov-glow"></div>
+        <div class="res-stars">${[1, 2, 3].map((i) => `<span class="${i <= (res.stars || 1) ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.22}s">★</span>`).join('')}</div>
+        <div class="title3d small" data-t="${n}단계 CLEAR!">${n}단계 CLEAR!</div>
+        ${record ? '<div class="ov-sub">🏅 최고 기록 갱신!</div>' : ''}
+        <div class="res-rows">${rows.map((r, i) => `<div style="animation-delay:${0.6 + i * 0.15}s"><span>${r[0]}</span><b>+${U.fmt(r[1])}</b></div>`).join('')}<div style="animation-delay:.9s"><span>점수</span><b>${U.fmt(res.score || 0)}</b></div></div>
+        <button class="cta big js-next">▶ ${n + 1}단계 도전</button>
+        <div class="ar-row"><button class="ghost-btn js-again">↺ 다시 하기</button><button class="ghost-btn js-vs">⚔️ 도전장</button><button class="ghost-btn js-list">게임 목록</button></div>`, 'tier-1 result');
+      const go = (fn) => () => { A.click(); this.close(d); fn(); };
+      d.querySelector('.js-next').addEventListener('click', go(() => this.startFree(g, n + 1)));
+      d.querySelector('.js-again').addEventListener('click', go(() => this.startFree(g, n)));
+      d.querySelector('.js-list').addEventListener('click', go(() => { this.clearStage(); this.openArcade(g); }));
+      d.querySelector('.js-vs').addEventListener('click', () => this.shareChallenge({ g, seed: meta.seed, gs: n, sc: res.score || 0 }));
+    },
+    startFreeSlot(cfg) {
+      const st = this.state;
+      ++this.flow;
+      this.clearStage();
+      if (this.restore) { st.ep = this.restore.ep; st.si = this.restore.si; this.restore = null; }
+      this.stage = { ei: st.ep, si: st.si, def: { g: 'slotfree', machine: cfg.id }, replay: true, free: true };
+      this.stageMachine = cfg.id;
+      this.screen('slot');
+      this.setTheme(cfg.theme);
+      this.game = new root.SlotGame(this, cfg);
+      this.game.mount();
+      this.toast('◀ 버튼을 누르면 게임 목록으로 돌아가요');
+    },
+
     openMenu() {
       const ago = C.loadedAt ? Math.max(0, Math.round((Date.now() - C.loadedAt) / 60000)) + '분 전' : '기본값 사용 중';
       const { d, close } = this.panel(`<div class="modal-head"><div><h3>메뉴</h3><div class="en">MENU</div></div><button class="icon-btn js-close" aria-label="닫기">✕</button></div>
         <div class="menu-list">
           <button class="js-m-resume">▶ 계속하기</button>
           <button class="js-m-map">🗺️ 지도로 가기</button>
+          <button class="js-m-free">🎮 자유 플레이 (게임·단계 골라 하기)</button>
           <button class="js-m-ep">📖 에피소드</button>
           <button class="js-m-league">🏆 주간 리그</button>
           <button class="js-m-quest">📜 퀘스트</button>
@@ -748,6 +857,7 @@
       on('.js-m-resume', () => {});
       on('.js-m-map', () => this.showMap(false));
       on('.js-m-ep', () => this.openEpisodes());
+      on('.js-m-free', () => { ++this.flow; this.clearStage(); this.openArcade(); });
       on('.js-m-league', () => this.openLeague());
       on('.js-m-quest', () => this.openQuests());
       on('.js-m-shop', () => this.openShop());
