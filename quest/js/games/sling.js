@@ -223,11 +223,16 @@
           if (c.vn < minVn && c.sep < 0.06) { minVn = c.vn; maxImp = Math.max(maxImp, c.mn * -c.vn); }
         }
         if (minVn < -1.3 && this.onHit) { this.onHit(ar, maxImp, -minVn); if (a.dead || b.dead) { ar.n = 0; continue; } }
+      }
+      for (let q = 0; q < act.length; q++) {
+        const ar = act[q], a = ar.a, b = ar.b;
+        if (a.dead || b.dead) ar.n = 0;
+        if (!ar.n) continue;
         a.touch = 1; b.touch = 1;
         for (let i = 0; i < ar.n; i++) {
           const c = ar.cs[i];
           c.bias = c.sep > 0 ? -c.sep * inv : BAUM * inv * Math.max(0, -c.sep - SLOP);
-          if (c.vn < -1.5) c.bias = Math.max(c.bias, -ar.e * c.vn);
+          if (c.vn < -3 && ar.e > 0.1) c.bias = Math.max(c.bias, -ar.e * c.vn);
           const Px = c.Pn * c.nx + c.Pt * c.ny, Py = c.Pn * c.ny - c.Pt * c.nx;
           a.vx -= a.im * Px; a.vy -= a.im * Py; a.w -= a.iI * (c.r1x * Py - c.r1y * Px);
           b.vx += b.im * Px; b.vy += b.im * Py; b.w += b.iI * (c.r2x * Py - c.r2y * Px);
@@ -659,7 +664,7 @@
         const wide = R() < 0.45;
         w = wide ? 3.6 : 2.4;
         for (let k = 0; k < f; k++) y = floor(y, wide && k < 2 ? true : wide && k >= 2 ? false : false, pickMat(), pickMat());
-        if (f > 1 && R() < 0.35) { const m = pickMat(); add(-0.7, y - 0.3, 0.3, 0.3, m); add(0.7, y - 0.3, 0.3, 0.3, m); slots.push({ x: 0, y, maxR: 0.45 }); }
+        if (f > 1 && R() < 0.35) { const m = pickMat(); add(-0.85, y - 0.3, 0.3, 0.3, m); add(0.85, y - 0.3, 0.3, 0.3, m); slots.push({ x: 0, y, maxR: 0.5 }); }
         else slots.push({ x: 0, y, maxR: 0.75 });
       } else if (type === 'bunker') {
         w = 3.6;
@@ -688,12 +693,14 @@
     layout() {
       if (!this.fit()) return;
       const W = this.W, H = this.H;
-      this.gy = Math.round(H * (H > W * 1.1 ? 0.8 : 0.86));
+      this.gy = Math.round(H * (H > W * 1.1 ? 0.84 : 0.86));
       const left = -4.6, right = this.levelR + 1.5, top = this.levelTop - 2.2;
       this.left = left; this.right = right;
       const full = Math.min(W / (right - left), (this.gy - 16) / -top);
-      this.sAim = Math.max(full, W / 32);
-      this.sFollow = Math.max(this.sAim, Math.min(W / 17, (this.gy - 16) / Math.max(9, -top)));
+      const portrait = H > W * 1.1;
+      // phones in portrait: zoom in (the camera pans to the towers during the intro and while the critter flies)
+      this.sAim = Math.max(full, portrait ? Math.min(W / 19, (this.gy - 16) / Math.max(6, -top)) : W / 32);
+      this.sFollow = Math.max(this.sAim, Math.min(portrait ? W / 14 : W / 17, (this.gy - 16) / Math.max(portrait ? 6 : 9, -top)));
       this.skyline = null;
       if (this.camS === 30 || !this.camS) { this.camS = this.sAim; this.camX = this.readyX(); }
     }
@@ -1530,5 +1537,6 @@
     }
   }
 
+  Sling._phys = { World, mkBody, MAT };
   root.QuestGames.sling = Sling;
 })(window);

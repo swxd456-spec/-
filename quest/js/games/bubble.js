@@ -862,14 +862,14 @@
       // finale fireworks
       if (this.state === 'finale') {
         if (this.fwLeft > 0 && this.tm >= this.fwNext) {
-          const batch = this.fwLeft > 16 ? Math.ceil(this.fwLeft / 12) : 1;
+          const batch = this.fwLeft > 12 ? 3 : this.fwLeft > 6 ? 2 : 1;
           for (let k = 0; k < batch; k++) {
             this.fwLeft--;
             const ci = Math.floor(Math.random() * COL.length);
             this.rockets.push({ x: this.sx, y: this.sy, vx: (Math.random() - 0.5) * d * 8, vy: -d * (16 + Math.random() * 5), ty: this.oy + d * (1 + Math.random() * 6), c: ci });
           }
           this.shots = this.fwLeft;
-          this.fwNext = this.tm + 0.2;
+          this.fwNext = this.tm + 0.16;
           this.sfx('launch');
           this.hudUpdate();
         }

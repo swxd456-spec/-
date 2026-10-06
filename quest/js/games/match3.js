@@ -8,8 +8,8 @@
   const DEF = {
     입장료: 100, 클리어보상: 300, 시간연장_가격: 150, 시간연장_초: 15,
     제한시간: 60,
-    목표점수_시작: 3000, 목표점수_최대: 26000, 목표증가_완만도: 32,
-    별2_배수: 1.4, 별3_배수: 1.9,
+    목표점수_시작: 3000, 목표점수_최대: 20000, 목표증가_완만도: 32,
+    별2_배수: 1.5, 별3_배수: 2.2,
     동물종류_시작: 5, 동물6종_시작판: 4,
     수집미션_시작판: 5, 수집미션_확률: 50, 수집개수_시작: 10, 수집개수_최대: 30,
     콤보유지_초_시작: 3, 콤보유지_초_최소: 2,
@@ -575,7 +575,7 @@
       }
       this.o.onEvent('match', { combo: this.combo });
     }
-    mult() { return (1 + 0.1 * Math.min(this.combo - 1, 30)) * (1 + 0.5 * (this.cascade - 1)) * (this.fever ? 2 : 1); }
+    mult() { return (1 + 0.05 * Math.min(this.combo - 1, 30)) * (1 + 0.5 * (this.cascade - 1)) * (this.fever ? 2 : 1); }
     applyClear(clear, makes, groups) {
       let n = 0, sx = 0, sy = 0, maxD = 0;
       const mi = this.mission;

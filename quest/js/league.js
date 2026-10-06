@@ -37,7 +37,7 @@
       return { name, av: AV[Math.floor(rnd() * AV.length)], end: Math.round(scale * skill), shape, seed: rnd() };
     });
   }
-  function rivalPts(r, prog) { return Math.round(r.end * Math.pow(prog, r.shape) * (0.92 + 0.08 * Math.sin(r.seed * 50 + prog * 20))); }
+  function rivalPts(r, prog) { prog = 0.12 + 0.88 * prog; return Math.round(r.end * Math.pow(prog, r.shape) * (0.92 + 0.08 * Math.sin(r.seed * 50 + prog * 20))); }
 
   const League = {
     TIERS,

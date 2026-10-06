@@ -512,3 +512,8 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .lg-line.down { color: #ff8da0; border-top: 1px dashed rgba(255, 100, 130, 0.5); padding-top: 4px; }
 .cine-deco i { position: absolute; left: var(--x); top: var(--y); font-style: normal; font-size: calc(46px * var(--s)); opacity: 0.5; filter: blur(calc((1.3 - var(--s)) * 3px)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5)); animation: decoFloat 5s ease-in-out infinite, cineDrift 14s linear infinite alternate; animation-delay: var(--d), 0s; }
 @keyframes cineDrift { to { translate: calc(var(--s) * -40px) 0; } }
+@media (max-width: 480px) { .mg-tools { gap: 6px; } .mg-tool { padding: 7px 10px 7px 7px; font-size: 12.5px; gap: 4px; } .mg-tool .ico { width: 26px; height: 26px; font-size: 15px; } }
+.q-top .wallet { white-space: nowrap; flex-shrink: 0; }
+.q-top { gap: 6px; }
+@media (max-width: 420px) { .q-top .icon-btn { width: 38px; height: 38px; } .q-top .wallet { padding-left: 6px; padding-right: 6px; font-size: 14px; } }
+.ic-sub { max-width: min(560px, 90vw); margin-left: auto; margin-right: auto; font: 700 clamp(13px, 3.4vw, 16px)/1.45 var(--ui); letter-spacing: 0; color: #ffe9a8; }
